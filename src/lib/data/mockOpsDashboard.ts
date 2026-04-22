@@ -39,6 +39,29 @@ export type ManualCloseBucket = { t: string; count: number };
 
 export type CapacityHourBucket = { hour: number; used: number };
 
+export type CancellationReasonKey =
+  | "customer_not_available"
+  | "bad_address"
+  | "out_of_stock"
+  | "payment_failed"
+  | "petshop_closed"
+  | "ops_error";
+
+export type CancellationReasonBucket = {
+  key: CancellationReasonKey;
+  label: string;
+  count: number;
+};
+
+export const CANCELLATION_REASONS: { key: CancellationReasonKey; label: string }[] = [
+  { key: "customer_not_available", label: "Cliente no estaba" },
+  { key: "bad_address", label: "Dirección incorrecta" },
+  { key: "out_of_stock", label: "Sin stock" },
+  { key: "payment_failed", label: "Pago rechazado" },
+  { key: "petshop_closed", label: "Petshop cerrado" },
+  { key: "ops_error", label: "Error operativo" },
+];
+
 export type PetshopMetrics = {
   petshopId: string;
   petshopName: string;
@@ -76,6 +99,7 @@ export type PetshopMetrics = {
   // Series
   manualCloseLast7: ManualCloseBucket[];
   cancelNewVsRec: { new: number; recurrent: number };
+  cancelReasons: CancellationReasonBucket[];
   solutions: number;
   devoluciones: number;
   retiros: number;
@@ -138,6 +162,29 @@ function iso(d: Date) {
 
 function pick<T>(rnd: () => number, arr: T[]) {
   return arr[Math.floor(rnd() * arr.length)];
+}
+
+function distributeByWeights(total: number, weights: number[], rnd: () => number) {
+  if (total <= 0) return weights.map(() => 0);
+  const n = Math.max(1, weights.length);
+  const safe = weights.map((w) => Math.max(0, w));
+  const sum = safe.reduce((a, b) => a + b, 0) || n;
+  const raw = safe.map((w) => (total * w) / sum);
+  const floors = raw.map((x) => Math.floor(x));
+  let remaining = Math.max(0, total - floors.reduce((a, b) => a + b, 0));
+
+  // Largest remainder method with a tiny random tie-breaker.
+  const order = raw
+    .map((x, i) => ({ i, rem: x - Math.floor(x), tie: rnd() }))
+    .sort((a, b) => (b.rem === a.rem ? b.tie - a.tie : b.rem - a.rem));
+
+  const out = floors.slice();
+  for (let k = 0; remaining > 0; k = (k + 1) % order.length) {
+    out[order[k]!.i]! += 1;
+    remaining -= 1;
+  }
+
+  return out;
 }
 
 function pad2(n: number) {
@@ -210,6 +257,8 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
     { id: "selpy_pets", name: "Selpy Pets", active: true },
     { id: "leocan", name: "Leocan", active: true },
     { id: "beauty_pet_shop", name: "Beauty Pet Shop", active: true },
+    // Cuando ningún petshop toma el pedido, se deriva a nosotros.
+    { id: "mis_pichos", name: "Mis Pichos", active: true },
   ];
 
   const customers = [
@@ -265,7 +314,8 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
     const d2 = round0(baseTotal * (0.01 + rnd() * 0.03));
     const reprog = round0(baseTotal * (0.02 + rnd() * 0.05));
     const cancel = round0(baseTotal * (0.01 + rnd() * 0.04));
-    const estancados = round0(baseTotal * (0.01 + rnd() * 0.035));
+    // Estancados: son casos aislados y se derivan a Mis Pichos.
+    const estancados = 0;
 
     const cancelPct = clamp((cancel / Math.max(1, baseTotal)) * 100, 0, 100);
     const d1pct = clamp((d1 / Math.max(1, baseTotal)) * 100, 0, 100);
@@ -303,6 +353,14 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
       recurrent: Math.max(0, cancel - round0(cancel * (0.55 + rnd() * 0.2))),
     };
 
+    const cancelReasonWeights = [1.1, 0.9, 1.4, 1.0, 0.7, 0.6].map((w) => w * (0.85 + rnd() * 0.4));
+    const cancelReasonCounts = distributeByWeights(cancel, cancelReasonWeights, rnd);
+    const cancelReasons = CANCELLATION_REASONS.map((r0, i) => ({
+      key: r0.key,
+      label: r0.label,
+      count: cancelReasonCounts[i] ?? 0,
+    }));
+
     const solutions = round0(baseTotal * (0.01 + rnd() * 0.03));
     const devoluciones = round0(baseTotal * (0.01 + rnd() * 0.02));
     const retiros = round0(baseTotal * (0.005 + rnd() * 0.02));
@@ -337,6 +395,7 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
       slPct,
       manualCloseLast7,
       cancelNewVsRec,
+      cancelReasons,
       solutions,
       devoluciones,
       retiros,
@@ -385,25 +444,28 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
       });
     }
 
-    for (let i = 0; i < Math.min(14, estancados); i++) {
-      const win = pickDeliveryWindow(rnd);
-      const baseCreated = new Date(now.getTime() - (10 + rnd() * 60) * 60 * 60 * 1000);
-      const createdAt = dateWithWindow(baseCreated, win, rnd);
-      const waitHours = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
-      const partido = pick(rnd, partidos);
-      const address = `${pick(rnd, streets)} ${partido}`;
-      estancadosRows.push({
-        orderId: orderIdNumeric(2000 + round0(rnd() * 8000)),
-        createdAt: createdAt.toISOString(),
-        customer: pick(rnd, customers),
-        address,
-        deliveryWindow: win,
-        product: `1 x ${ps.name} ${pick(rnd, products)}`,
-        petshopId: ps.id,
-        petshopName: ps.name,
-        waitHours: round0(waitHours),
-      });
-    }
+  }
+
+  // Un único caso estancado derivado a Mis Pichos (representativo).
+  {
+    const mp = petshops.find((p) => p.id === "mis_pichos");
+    const win = pickDeliveryWindow(rnd);
+    const baseCreated = new Date(now.getTime() - (18 + rnd() * 36) * 60 * 60 * 1000);
+    const createdAt = dateWithWindow(baseCreated, win, rnd);
+    const waitHours = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
+    const partido = pick(rnd, partidos);
+    const address = `${pick(rnd, streets)} ${partido}`;
+    estancadosRows.push({
+      orderId: orderIdNumeric(9000 + round0(rnd() * 8000)),
+      createdAt: createdAt.toISOString(),
+      customer: pick(rnd, customers),
+      address,
+      deliveryWindow: win,
+      product: `Derivado (sin petshop) · ${pick(rnd, products)}`,
+      petshopId: "mis_pichos",
+      petshopName: mp?.name ?? "Mis Pichos",
+      waitHours: round0(waitHours),
+    });
   }
 
   estancadosRows.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());

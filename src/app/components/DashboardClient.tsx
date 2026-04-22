@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { OpsDashboardResponse, PetshopMetrics, SinDespacharRow } from "@/lib/data/mockOpsDashboard";
+import type { CancellationReasonBucket, OpsDashboardResponse, PetshopMetrics, SinDespacharRow } from "@/lib/data/mockOpsDashboard";
 
 function ymd(d: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -283,6 +283,28 @@ function kpiDeltaText(deltaPct: number) {
   return `${sign}${round0(deltaPct)}% vs ayer`;
 }
 
+function deltaColor(deltaPct: number) {
+  if (deltaPct > 0) return "var(--ok)";
+  if (deltaPct < 0) return "var(--bad)";
+  return "var(--muted)";
+}
+
+type KpiTone = "ok" | "warn" | "bad" | "neutral";
+
+function toneColor(t: KpiTone) {
+  if (t === "ok") return "var(--ok)";
+  if (t === "warn") return "var(--warn)";
+  if (t === "bad") return "var(--bad)";
+  return "var(--muted)";
+}
+
+function toneByRate(rate01: number, warnAt: number, badAt: number): KpiTone {
+  if (!Number.isFinite(rate01) || rate01 <= 0) return "ok";
+  if (rate01 >= badAt) return "bad";
+  if (rate01 >= warnAt) return "warn";
+  return "ok";
+}
+
 function usageColor(p: number) {
   if (p > 0.9) return "var(--bad)";
   if (p >= 0.7) return "var(--warn)";
@@ -514,6 +536,36 @@ export default function DashboardClient() {
     return list.slice(-5).map((b) => ({ id: b.t, label: ymd(new Date(b.t)).slice(5), value: b.count }));
   }, [data, petshopId]);
 
+  const cancelReasonsBars = useMemo(() => {
+    if (!data) return [];
+
+    const list: CancellationReasonBucket[] =
+      petshopId === "ALL"
+        ? (() => {
+            const totals = new Map<string, { label: string; count: number }>();
+            for (const m of data.metricsByPetshop) {
+              for (const r0 of m.cancelReasons ?? []) {
+                const prev = totals.get(r0.key) ?? { label: r0.label, count: 0 };
+                totals.set(r0.key, { label: prev.label, count: prev.count + (r0.count ?? 0) });
+              }
+            }
+            return Array.from(totals.entries()).map(([key, v]) => ({ key: key as CancellationReasonBucket["key"], label: v.label, count: v.count }));
+          })()
+        : data.metricsByPetshop.find((m) => m.petshopId === petshopId)?.cancelReasons ?? [];
+
+    const totalCancel = Math.max(0, list.reduce((acc, x) => acc + (x.count ?? 0), 0));
+    const rows = list
+      .map((x) => ({
+        id: x.key,
+        label: x.label,
+        valuePct: pct(x.count ?? 0, totalCancel),
+        count: x.count ?? 0,
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    return rows.slice(0, 6);
+  }, [data, petshopId]);
+
   const capacity = useMemo(() => {
     if (!data || !metricsSelected) return null;
     const limits = data.capacityLimits;
@@ -584,7 +636,16 @@ export default function DashboardClient() {
           <div className="kpiMain">
             <div className="kpiLabel">Total pedidos</div>
             <div className="kpiValue">{metricsSelected ? metricsSelected.total.toLocaleString("es-AR") : "—"}</div>
-            <div className="kpiSub">{metricsSelected ? kpiDeltaText((Math.random() - 0.4) * 20) : "—"}</div>
+            <div className="kpiSub">
+              {metricsSelected ? (
+                (() => {
+                  const delta = (Math.random() - 0.4) * 20;
+                  return <span style={{ color: deltaColor(delta) }}>{kpiDeltaText(delta)}</span>;
+                })()
+              ) : (
+                "—"
+              )}
+            </div>
             <div className="kpiDivider" />
             <div className="kpiDetail">
               <span className="kpiDetailLabel">Transacciones</span>
@@ -595,23 +656,58 @@ export default function DashboardClient() {
           <div className="kpiSmallGrid">
             <div className="kpiSmall">
               <div className="kpiLabel">Sin despachar</div>
-              <div className="kpiValue">{metricsSelected ? metricsSelected.sindesp : "—"}</div>
+              <div
+                className="kpiValue"
+                style={{
+                  color: metricsSelected ? toneColor(toneByRate(metricsSelected.sindesp / Math.max(1, metricsSelected.total), 0.03, 0.06)) : undefined,
+                }}
+              >
+                {metricsSelected ? metricsSelected.sindesp : "—"}
+              </div>
             </div>
             <div className="kpiSmall">
               <div className="kpiLabel">Demorados 1ra vuelta</div>
-              <div className="kpiValue">{metricsSelected ? `${metricsSelected.d1} (${formatPct0(metricsSelected.d1pct)})` : "—"}</div>
+              <div
+                className="kpiValue"
+                style={{
+                  color: metricsSelected ? toneColor(toneByRate(metricsSelected.d1pct / 100, 0.03, 0.06)) : undefined,
+                }}
+              >
+                {metricsSelected ? `${metricsSelected.d1} (${formatPct0(metricsSelected.d1pct)})` : "—"}
+              </div>
             </div>
             <div className="kpiSmall">
               <div className="kpiLabel">Demorados 2da vuelta</div>
-              <div className="kpiValue">{metricsSelected ? `${metricsSelected.d2} (${formatPct0(metricsSelected.d2pct)})` : "—"}</div>
+              <div
+                className="kpiValue"
+                style={{
+                  color: metricsSelected ? toneColor(toneByRate(metricsSelected.d2pct / 100, 0.015, 0.03)) : undefined,
+                }}
+              >
+                {metricsSelected ? `${metricsSelected.d2} (${formatPct0(metricsSelected.d2pct)})` : "—"}
+              </div>
             </div>
             <div className="kpiSmall">
               <div className="kpiLabel">Reprogramar</div>
-              <div className="kpiValue">{metricsSelected ? metricsSelected.reprog : "—"}</div>
+              <div
+                className="kpiValue"
+                style={{
+                  color: metricsSelected ? toneColor(toneByRate(metricsSelected.reprog / Math.max(1, metricsSelected.total), 0.02, 0.04)) : undefined,
+                }}
+              >
+                {metricsSelected ? metricsSelected.reprog : "—"}
+              </div>
             </div>
             <div className="kpiSmall">
               <div className="kpiLabel">Cancelados</div>
-              <div className="kpiValue">{metricsSelected ? `${metricsSelected.cancel} (${formatPct0(metricsSelected.cancelPct)})` : "—"}</div>
+              <div
+                className="kpiValue"
+                style={{
+                  color: metricsSelected ? toneColor(toneByRate(metricsSelected.cancelPct / 100, 0.02, 0.04)) : undefined,
+                }}
+              >
+                {metricsSelected ? `${metricsSelected.cancel} (${formatPct0(metricsSelected.cancelPct)})` : "—"}
+              </div>
             </div>
           </div>
         </div>
@@ -987,8 +1083,17 @@ export default function DashboardClient() {
             <div className="miniHeader">
               <div className="miniTitle">% cancelados por petshop</div>
             </div>
-            <div className="note">Motivos: pendiente integración con Wizard</div>
             <VerticalBars items={cancelPctBars} color="var(--bad)" valueFormatter={(n) => `${n}%`} />
+            <div className="kpiDivider" />
+            <div className="miniHeader" style={{ marginTop: 10 }}>
+              <div className="miniTitle">Motivos de cancelación</div>
+              <div className="sub">{petshopId === "ALL" ? "Vista global" : "Petshop seleccionado"}</div>
+            </div>
+            {cancelReasonsBars.length ? (
+              <BarList items={cancelReasonsBars} color="color-mix(in srgb, var(--bad) 70%, transparent)" />
+            ) : (
+              <div className="sub">—</div>
+            )}
           </div>
           <div className="miniCard">
             <div className="miniHeader">
