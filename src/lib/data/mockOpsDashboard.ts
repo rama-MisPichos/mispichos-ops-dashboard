@@ -45,6 +45,7 @@ export type PetshopMetrics = {
 
   // Required keys (as requested)
   total: number;
+  delivered: number;
   transacciones: number;
   sindesp: number;
   d1: number;
@@ -60,15 +61,17 @@ export type PetshopMetrics = {
   recurrentClients: number;
   newPct: number;
   recPct: number;
+  /** Entregadas a tiempo (sobre creadas no canceladas) */
   onTimeN: number;
+  /** Entregadas fuera de tiempo (sobre creadas no canceladas) */
   outTimeN: number;
+  /** % entregadas a tiempo sobre (creadas - canceladas) */
   onTimePct: number;
+  /** % entregadas fuera de tiempo sobre (creadas - canceladas) */
   outTimePct: number;
 
   // SL
   slPct: number;
-  onTimePctSl: number;
-  inFullPct: number;
 
   // Series
   manualCloseLast7: ManualCloseBucket[];
@@ -91,7 +94,7 @@ export type OpsDashboardResponse = {
   reprogramarRows: ReprogramarRow[];
   sinDespacharRows: SinDespacharRow[];
   estancadosRows: EstancadoRow[];
-  top3Petshops: { petshopId: string; petshopName: string; pct: number }[];
+  top3Petshops: { petshopId: string; petshopName: string; pct: number; orders: number }[];
   capacityLimits: { flexPerDay: number; franjaPerDay: number };
 };
 
@@ -158,6 +161,40 @@ function orderIdNumeric(seed: number) {
   return String(1424413 + seed);
 }
 
+function buildCapacityHourly(rnd: () => number, limitPerDay: number): CapacityHourBucket[] {
+  // In real ops they rarely exceed capacity, so keep utilization under ~90% most days.
+  const util = 0.55 + rnd() * 0.33; // 55%..88%
+  const targetTotal = limitPerDay * util;
+
+  const weights: number[] = [];
+  for (let h = 0; h < 24; h++) {
+    const wave = Math.sin(((h - 8) / 24) * Math.PI * 2) * 0.5 + 0.5; // 0..1
+    const noise = 0.75 + rnd() * 0.7;
+    weights.push(Math.max(0.05, wave * noise));
+  }
+  const sumW = weights.reduce((a, b) => a + b, 0) || 1;
+
+  const hourly: CapacityHourBucket[] = weights.map((w, hour) => ({ hour, used: (w / sumW) * targetTotal }));
+
+  // Round to ints and keep sum close to target without exceeding limit.
+  const rounded = hourly.map((b) => ({ ...b, used: Math.max(0, Math.floor(b.used)) }));
+  let diff = Math.max(0, Math.floor(targetTotal) - rounded.reduce((a, b) => a + b.used, 0));
+  while (diff > 0) {
+    const h = Math.floor(rnd() * 24);
+    rounded[h]!.used += 1;
+    diff -= 1;
+  }
+
+  const sumRounded = rounded.reduce((a, b) => a + b.used, 0);
+  const maxAllowed = Math.floor(limitPerDay * 0.93);
+  if (sumRounded > maxAllowed) {
+    const ratio = maxAllowed / sumRounded;
+    return rounded.map((b) => ({ hour: b.hour, used: Math.floor(b.used * ratio) }));
+  }
+
+  return rounded;
+}
+
 export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboardResponse {
   const rnd = mulberry32(99);
   const now = new Date();
@@ -216,6 +253,8 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
   const sinDespacharRows: SinDespacharRow[] = [];
   const estancadosRows: EstancadoRow[] = [];
 
+  const capacityLimits = { flexPerDay: 400, franjaPerDay: 160 };
+
   // Build per-petshop metrics with plausible ranges
   for (const ps of petshops) {
     const baseTotal = round0(180 + rnd() * 220);
@@ -240,13 +279,18 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
     const newPct = clamp((newClients / Math.max(1, newClients + recurrentClients)) * 100, 0, 100);
     const recPct = 100 - newPct;
 
-    const outTimeN = round0(baseTotal * (0.08 + rnd() * 0.12));
-    const onTimeN = Math.max(0, baseTotal - outTimeN);
-    const onTimePct = clamp((onTimeN / Math.max(1, baseTotal)) * 100, 0, 100);
-    const outTimePct = 100 - onTimePct;
+    const eligible = Math.max(0, baseTotal - cancel);
+    let delivered = round0(baseTotal * (0.86 + rnd() * 0.11)); // 86%..97% delivered (rough)
+    delivered = Math.min(delivered, eligible);
 
-    const inFullPct = clamp(92 + rnd() * 6 - (cancelPct * 0.6), 70, 100);
-    const slPct = clamp(onTimePct * 0.7 + inFullPct * 0.3, 0, 100);
+    const lateShare = 0.04 + rnd() * 0.12; // 4%..16% of delivered are late
+    const outTimeN = Math.min(delivered, round0(delivered * lateShare));
+    const onTimeN = Math.max(0, delivered - outTimeN);
+
+    const onTimePct = clamp((onTimeN / Math.max(1, eligible)) * 100, 0, 100);
+    const outTimePct = clamp((outTimeN / Math.max(1, eligible)) * 100, 0, 100);
+
+    const slPct = clamp((delivered / Math.max(1, baseTotal)) * 100, 0, 100);
 
     const manualCloseLast7: ManualCloseBucket[] = [];
     const last7Start = addDays(startOfDay(now), -6);
@@ -263,18 +307,14 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
     const devoluciones = round0(baseTotal * (0.01 + rnd() * 0.02));
     const retiros = round0(baseTotal * (0.005 + rnd() * 0.02));
 
-    const capacityFlexHourly: CapacityHourBucket[] = [];
-    const capacityFranjaHourly: CapacityHourBucket[] = [];
-    for (let h = 0; h < 24; h++) {
-      const wave = Math.sin(((h - 8) / 24) * Math.PI * 2) * 0.5 + 0.5;
-      capacityFlexHourly.push({ hour: h, used: round0(wave * (20 + rnd() * 40)) });
-      capacityFranjaHourly.push({ hour: h, used: round0(wave * (10 + rnd() * 22)) });
-    }
+    const capacityFlexHourly = buildCapacityHourly(rnd, capacityLimits.flexPerDay);
+    const capacityFranjaHourly = buildCapacityHourly(rnd, capacityLimits.franjaPerDay);
 
     metricsByPetshop.push({
       petshopId: ps.id,
       petshopName: ps.name,
       total: baseTotal,
+      delivered,
       transacciones,
       sindesp,
       d1,
@@ -295,8 +335,6 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
       onTimePct,
       outTimePct,
       slPct,
-      onTimePctSl: onTimePct,
-      inFullPct,
       manualCloseLast7,
       cancelNewVsRec,
       solutions,
@@ -378,6 +416,7 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
     petshopId: x.id,
     petshopName: x.name,
     pct: totalTodaySum ? round0((x.total / totalTodaySum) * 100) : 0,
+    orders: x.total,
   }));
 
   const timelineDaily: TimelineBucket[] = days.map((d) => {
@@ -401,7 +440,7 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
     sinDespacharRows,
     estancadosRows,
     top3Petshops,
-    capacityLimits: { flexPerDay: 400, franjaPerDay: 160 },
+    capacityLimits,
   };
 }
 

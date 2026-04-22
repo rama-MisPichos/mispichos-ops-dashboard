@@ -283,6 +283,12 @@ function kpiDeltaText(deltaPct: number) {
   return `${sign}${round0(deltaPct)}% vs ayer`;
 }
 
+function usageColor(p: number) {
+  if (p > 0.9) return "var(--bad)";
+  if (p >= 0.7) return "var(--warn)";
+  return "var(--ok)";
+}
+
 export default function DashboardClient() {
   const today = useMemo(() => new Date(), []);
   const [from, setFrom] = useState(() => ymd(new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000)));
@@ -328,6 +334,7 @@ export default function DashboardClient() {
     if (!list.length) return null;
     const sum = (f: (m: PetshopMetrics) => number) => list.reduce((acc, m) => acc + (f(m) ?? 0), 0);
     const total = sum((m) => m.total);
+    const delivered = sum((m) => m.delivered);
     const transacciones = sum((m) => m.transacciones);
     const sindesp = sum((m) => m.sindesp);
     const d1 = sum((m) => m.d1);
@@ -339,15 +346,15 @@ export default function DashboardClient() {
     const recurrentClients = sum((m) => m.recurrentClients);
     const onTimeN = sum((m) => m.onTimeN);
     const outTimeN = sum((m) => m.outTimeN);
+    const eligible = Math.max(0, total - cancel);
 
-    const slPct = total ? pct(sum((m) => (m.slPct * m.total) / 100), total) : 0;
-    const onTimePctSl = total ? pct(sum((m) => (m.onTimePctSl * m.total) / 100), total) : 0;
-    const inFullPct = total ? pct(sum((m) => (m.inFullPct * m.total) / 100), total) : 0;
+    const slPct = pct(delivered, total);
 
     return {
       petshopId: "ALL",
       petshopName: "Vista global",
       total,
+      delivered,
       transacciones,
       sindesp,
       d1,
@@ -365,11 +372,9 @@ export default function DashboardClient() {
       recPct: pct(recurrentClients, newClients + recurrentClients),
       onTimeN,
       outTimeN,
-      onTimePct: pct(onTimeN, onTimeN + outTimeN),
-      outTimePct: pct(outTimeN, onTimeN + outTimeN),
+      onTimePct: pct(onTimeN, eligible),
+      outTimePct: pct(outTimeN, eligible),
       slPct,
-      onTimePctSl,
-      inFullPct,
     };
   }, [data?.metricsByPetshop]);
 
@@ -392,10 +397,8 @@ export default function DashboardClient() {
 
   const top3 = useMemo(() => {
     if (!data) return [];
-    if (petshopId === "ALL") return data.top3Petshops;
-    const m = data.metricsByPetshop.find((x) => x.petshopId === petshopId);
-    return m ? [{ petshopId: m.petshopId, petshopName: m.petshopName, pct: 100 }] : [];
-  }, [data, petshopId]);
+    return data.top3Petshops;
+  }, [data]);
 
   const reprogramarRows = useMemo(() => {
     if (!data) return [];
@@ -629,13 +632,18 @@ export default function DashboardClient() {
           </div>
           <div className="miniCard">
             <div className="miniHeader">
-              <div className="miniTitle">On time vs Out of time</div>
+              <div className="miniTitle">Entregas a tiempo</div>
             </div>
+            <p className="sub">
+              {metricsSelected
+                ? `Sobre creadas no canceladas: ${Math.max(0, metricsSelected.total - metricsSelected.cancel).toLocaleString("es-AR")}`
+                : "—"}
+            </p>
             <Doughnut
-              aLabel="On time"
+              aLabel="A tiempo"
               aValue={metricsSelected?.onTimeN ?? 0}
               aColor="var(--ok)"
-              bLabel="Out of time"
+              bLabel="Fuera de tiempo"
               bValue={metricsSelected?.outTimeN ?? 0}
               bColor="var(--bad)"
             />
@@ -647,39 +655,41 @@ export default function DashboardClient() {
         <div className="sectionHeader">
           <div>
             <h2>Service level (SL) en tiempo real</h2>
-            <p>Una fila por petshop</p>
+            <p>SL = % entregadas sobre creadas</p>
           </div>
         </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Petshop</th>
-              <th>SL %</th>
-              <th>On time %</th>
-              <th>In full %</th>
-              <th>Progreso</th>
-              <th>Estado</th>
-            </tr>
-          </thead>
-          <tbody>
-            {slRows.map((r) => (
-              <tr key={r.petshopId}>
-                <td>{r.petshopName}</td>
-                <td style={{ color: r.slPct >= 90 ? "var(--ok)" : r.slPct >= 85 ? "var(--warn)" : "var(--bad)" }}>
-                  {formatPct0(r.slPct)}
-                </td>
-                <td>{formatPct0(r.onTimePctSl)}</td>
-                <td>{formatPct0(r.inFullPct)}</td>
-                <td>
-                  <SlProgress slPct={r.slPct} />
-                </td>
-                <td>
-                  <span className={badgeClassBySl(r.slPct)}>{slStatus(r.slPct)}</span>
-                </td>
+        <div className="tableScroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Petshop</th>
+                <th>Creadas</th>
+                <th>Entregadas</th>
+                <th>SL %</th>
+                <th>Progreso</th>
+                <th>Estado</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {slRows.map((r) => (
+                <tr key={r.petshopId}>
+                  <td>{r.petshopName}</td>
+                  <td className="mono">{r.total.toLocaleString("es-AR")}</td>
+                  <td className="mono">{r.delivered.toLocaleString("es-AR")}</td>
+                  <td style={{ color: r.slPct >= 90 ? "var(--ok)" : r.slPct >= 85 ? "var(--warn)" : "var(--bad)" }}>
+                    {formatPct0(r.slPct)}
+                  </td>
+                  <td>
+                    <SlProgress slPct={r.slPct} />
+                  </td>
+                  <td>
+                    <span className={badgeClassBySl(r.slPct)}>{slStatus(r.slPct)}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section className="section">
@@ -701,7 +711,10 @@ export default function DashboardClient() {
                   <div style={{ width: `${clamp(t0.pct, 0, 100)}%`, background: "var(--info)" }} />
                 </div>
               </div>
-              <div className="top3Pct mono">{formatPct0(t0.pct)}</div>
+              <div className="top3Pct">
+                <div className="mono">{formatPct0(t0.pct)}</div>
+                <div className="sub mono">{t0.orders.toLocaleString("es-AR")} pedidos</div>
+              </div>
             </div>
           ))}
         </div>
@@ -758,32 +771,43 @@ export default function DashboardClient() {
             />
           </div>
         </div>
-        <table>
-          <thead>
-            <tr>
-              <th>#pedido</th>
-              <th>Fecha y hora</th>
-              <th>Franja</th>
-              <th>Cliente</th>
-              <th>Domicilio</th>
-              <th>Producto</th>
-              <th>Petshop</th>
-            </tr>
-          </thead>
-          <tbody>
-            {reprogramarRowsView.map((r) => (
-              <tr key={`${r.orderId}-${r.createdAt}`} data-ps={r.petshopId ?? ""}>
-                <td className="mono">{r.orderId}</td>
-                <td>{new Date(r.createdAt).toLocaleString("es-AR")}</td>
-                <td className="mono">{r.deliveryWindow ?? "—"}</td>
-                <td>{r.customer}</td>
-                <td>{r.address}</td>
-                <td>{r.product}</td>
-                <td>{r.petshopName ?? "—"}</td>
+        <div className="tableScroll">
+          <table className="tableFixed">
+            <colgroup>
+              <col style={{ width: "92px" }} />
+              <col style={{ width: "160px" }} />
+              <col style={{ width: "64px" }} />
+              <col style={{ width: "160px" }} />
+              <col style={{ width: "260px" }} />
+              <col style={{ width: "320px" }} />
+              <col style={{ width: "160px" }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>#pedido</th>
+                <th>Fecha y hora</th>
+                <th>Franja</th>
+                <th>Cliente</th>
+                <th>Domicilio</th>
+                <th>Producto</th>
+                <th>Petshop</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {reprogramarRowsView.map((r) => (
+                <tr key={`${r.orderId}-${r.createdAt}`} data-ps={r.petshopId ?? ""}>
+                  <td className="mono">{r.orderId}</td>
+                  <td>{new Date(r.createdAt).toLocaleString("es-AR")}</td>
+                  <td className="mono">{r.deliveryWindow ?? "—"}</td>
+                  <td className="truncate">{r.customer}</td>
+                  <td className="truncate">{r.address}</td>
+                  <td className="truncate">{r.product}</td>
+                  <td className="truncate">{r.petshopName ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section className="section">
@@ -838,35 +862,46 @@ export default function DashboardClient() {
             />
           </div>
         </div>
-        <table>
-          <thead>
-            <tr>
-              <th>#pedido</th>
-              <th>Etiqueta impresa</th>
-              <th>Franja</th>
-              <th>Cliente</th>
-              <th>Domicilio</th>
-              <th>Producto</th>
-              <th>Horas de espera</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sinDespacharRowsView.map((r: SinDespacharRow) => {
-              const color = r.waitHours > 28 ? "var(--bad)" : r.waitHours >= 24 ? "var(--warn)" : "var(--muted)";
-              return (
-                <tr key={`${r.orderId}-${r.labelPrintedAt}`}>
-                  <td className="mono">{r.orderId}</td>
-                  <td>{new Date(r.labelPrintedAt).toLocaleString("es-AR")}</td>
-                  <td className="mono">{r.deliveryWindow ?? "—"}</td>
-                  <td>{r.customer}</td>
-                  <td>{r.address}</td>
-                  <td>{r.product}</td>
-                  <td style={{ color, fontWeight: 500 }}>{round0(r.waitHours)}h</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <div className="tableScroll">
+          <table className="tableFixed">
+            <colgroup>
+              <col style={{ width: "92px" }} />
+              <col style={{ width: "160px" }} />
+              <col style={{ width: "64px" }} />
+              <col style={{ width: "160px" }} />
+              <col style={{ width: "280px" }} />
+              <col style={{ width: "340px" }} />
+              <col style={{ width: "120px" }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>#pedido</th>
+                <th>Etiqueta impresa</th>
+                <th>Franja</th>
+                <th>Cliente</th>
+                <th>Domicilio</th>
+                <th>Producto</th>
+                <th>Horas de espera</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sinDespacharRowsView.map((r: SinDespacharRow) => {
+                const color = r.waitHours > 28 ? "var(--bad)" : r.waitHours >= 24 ? "var(--warn)" : "var(--muted)";
+                return (
+                  <tr key={`${r.orderId}-${r.labelPrintedAt}`}>
+                    <td className="mono">{r.orderId}</td>
+                    <td>{new Date(r.labelPrintedAt).toLocaleString("es-AR")}</td>
+                    <td className="mono">{r.deliveryWindow ?? "—"}</td>
+                    <td className="truncate">{r.customer}</td>
+                    <td className="truncate">{r.address}</td>
+                    <td className="truncate">{r.product}</td>
+                    <td style={{ color, fontWeight: 500 }}>{round0(r.waitHours)}h</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section className="section">
@@ -1029,7 +1064,18 @@ export default function DashboardClient() {
           <div className="miniCard">
             <div className="miniHeader">
               <div className="miniTitle">Flex</div>
-              <div className="sub">{capacity ? `${capacity.flex.used}/${capacity.flex.limit}` : "—"}</div>
+              {capacity ? (
+                <div className="utilRight">
+                  <div className="utilPct" style={{ color: usageColor(capacity.flex.used / capacity.flex.limit) }}>
+                    {formatPct0(pct(capacity.flex.used, capacity.flex.limit))}
+                  </div>
+                  <div className="sub mono">
+                    {capacity.flex.used}/{capacity.flex.limit}
+                  </div>
+                </div>
+              ) : (
+                <div className="sub">—</div>
+              )}
             </div>
             {capacity ? (
               <>
@@ -1037,23 +1083,41 @@ export default function DashboardClient() {
                   <div
                     style={{
                       width: `${clamp((capacity.flex.used / capacity.flex.limit) * 100, 0, 100)}%`,
-                      background:
-                        capacity.flex.used / capacity.flex.limit > 0.9
-                          ? "var(--bad)"
-                          : capacity.flex.used / capacity.flex.limit >= 0.7
-                            ? "var(--warn)"
-                            : "var(--ok)",
+                      background: usageColor(capacity.flex.used / capacity.flex.limit),
                     }}
                   />
                 </div>
                 <LineMini points={capacity.flex.hourly.map((x) => ({ x: x.hour, y: x.used }))} limit={round0(capacity.flex.limit / 24)} />
+                <div className="utilMeta">
+                  <span className="utilChip utilChipLimit">
+                    <span className="utilChipSwatch utilChipSwatchLimit" aria-hidden="true" />
+                    <span className="utilChipLabel">Límite/h</span>
+                    <span className="utilChipValue">{round0(capacity.flex.limit / 24)}</span>
+                  </span>
+                  <span className="utilChip utilChipUsed">
+                    <span className="utilChipSwatch utilChipSwatchUsed" aria-hidden="true" />
+                    <span className="utilChipLabel">Usado/h</span>
+                    <span className="utilChipValue">{round0(capacity.flex.used / 24)}</span>
+                  </span>
+                </div>
               </>
             ) : null}
           </div>
           <div className="miniCard">
             <div className="miniHeader">
               <div className="miniTitle">Franja corta</div>
-              <div className="sub">{capacity ? `${capacity.franja.used}/${capacity.franja.limit}` : "—"}</div>
+              {capacity ? (
+                <div className="utilRight">
+                  <div className="utilPct" style={{ color: usageColor(capacity.franja.used / capacity.franja.limit) }}>
+                    {formatPct0(pct(capacity.franja.used, capacity.franja.limit))}
+                  </div>
+                  <div className="sub mono">
+                    {capacity.franja.used}/{capacity.franja.limit}
+                  </div>
+                </div>
+              ) : (
+                <div className="sub">—</div>
+              )}
             </div>
             {capacity ? (
               <>
@@ -1061,12 +1125,7 @@ export default function DashboardClient() {
                   <div
                     style={{
                       width: `${clamp((capacity.franja.used / capacity.franja.limit) * 100, 0, 100)}%`,
-                      background:
-                        capacity.franja.used / capacity.franja.limit > 0.9
-                          ? "var(--bad)"
-                          : capacity.franja.used / capacity.franja.limit >= 0.7
-                            ? "var(--warn)"
-                            : "var(--ok)",
+                      background: usageColor(capacity.franja.used / capacity.franja.limit),
                     }}
                   />
                 </div>
@@ -1074,6 +1133,18 @@ export default function DashboardClient() {
                   points={capacity.franja.hourly.map((x) => ({ x: x.hour, y: x.used }))}
                   limit={round0(capacity.franja.limit / 24)}
                 />
+                <div className="utilMeta">
+                  <span className="utilChip utilChipLimit">
+                    <span className="utilChipSwatch utilChipSwatchLimit" aria-hidden="true" />
+                    <span className="utilChipLabel">Límite/h</span>
+                    <span className="utilChipValue">{round0(capacity.franja.limit / 24)}</span>
+                  </span>
+                  <span className="utilChip utilChipUsed">
+                    <span className="utilChipSwatch utilChipSwatchUsed" aria-hidden="true" />
+                    <span className="utilChipLabel">Usado/h</span>
+                    <span className="utilChipValue">{round0(capacity.franja.used / 24)}</span>
+                  </span>
+                </div>
               </>
             ) : null}
           </div>

@@ -262,6 +262,20 @@ a{ color:inherit; text-decoration:none; }
   margin-bottom: 10px;
 }
 
+.utilRight{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+  gap: 2px;
+}
+
+.utilPct{
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  line-height: 1;
+}
+
 .miniTitle{
   font-size: 11px;
   font-weight: 500;
@@ -394,6 +408,68 @@ a{ color:inherit; text-decoration:none; }
   background: var(--surface);
   border: 0.5px solid var(--border);
   border-radius: 10px;
+}
+
+.utilMeta{
+  margin-top: 10px;
+  display:flex;
+  flex-wrap:wrap;
+  gap: 8px;
+  align-items:center;
+  justify-content:center;
+}
+
+.utilChip{
+  display:flex;
+  align-items:baseline;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  border: 0.5px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+  font-size: 11px;
+  color: var(--text);
+}
+
+.utilChipSwatch{
+  width: 14px;
+  height: 0;
+  border-top: 2px solid currentColor;
+  border-radius: 2px;
+  margin-right: 2px;
+  transform: translateY(-1px);
+}
+
+.utilChipLimit{
+  color: var(--bad);
+  border-color: color-mix(in srgb, var(--bad) 35%, var(--border));
+  background: color-mix(in srgb, var(--badBg) 35%, transparent);
+}
+
+.utilChipSwatchLimit{
+  border-top-style: dashed;
+  opacity: 0.95;
+}
+
+.utilChipUsed{
+  color: var(--info);
+  border-color: color-mix(in srgb, var(--info) 35%, var(--border));
+  background: color-mix(in srgb, var(--infoBg) 35%, transparent);
+}
+
+.utilChipSwatchUsed{
+  opacity: 0.95;
+}
+
+.utilChipLabel{
+  color: var(--muted);
+  letter-spacing: .12px;
+}
+
+.utilChipValue{
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .card{
@@ -550,6 +626,31 @@ table{
   overflow:hidden;
   table-layout: fixed;
 }
+
+.tableScroll{
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 12px;
+}
+
+.tableScroll table{
+  min-width: 760px;
+}
+
+.tableFixed{
+  table-layout: fixed;
+}
+
+.tableFixed th,
+.tableFixed td{
+  white-space: nowrap;
+}
+
+.truncate{
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 th, td{
   text-align:left;
   padding: 8px 8px;
@@ -575,14 +676,26 @@ tr:hover td{
   .card{ grid-column: span 6; }
 }
 @media (max-width: 640px){
+  .container{ padding: 14px 12px 48px; }
   .topbar{ flex-direction:column; align-items:flex-start; }
+  .title h1{ font-size: 16px; }
+  .topbarMeta{ font-size: 11px; }
   .chipRow{ justify-content:flex-start; }
+  .chip{ width: 100%; justify-content: space-between; }
+  .selectInput{ max-width: 60vw; }
+  .dateInput{ width: 100%; }
   .card{ grid-column: span 12; }
   .kpiRow{ grid-template-columns: 1fr; }
   .kpiSmallGrid{ grid-template-columns: 1fr; }
   .twoCol{ grid-template-columns: 1fr; }
   .barRow{ grid-template-columns: 1fr; }
   .stackedRow{ grid-template-columns: 1fr; }
+  .top3Item{ grid-template-columns: 30px 1fr; }
+  .top3Pct{ text-align:left; }
+  .donutLegend{ max-width: 100%; }
+  .vbars{ height: 160px; }
+  .vbar{ height: 120px; }
+  .lineMini{ height: 120px; }
 }
 
 /* Utilities for semantic colors */
