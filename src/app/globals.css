@@ -68,6 +68,189 @@ a{ color:inherit; text-decoration:none; }
   padding:20px 16px 56px;
 }
 
+.dashboardLayout{
+  display:grid;
+  grid-template-columns: minmax(0, 260px) minmax(0, 1fr);
+  gap: 14px;
+  align-items:start;
+}
+
+.dashboardLayout > *{
+  min-width: 0;
+}
+
+.dashboardMain{
+  min-width: 0;
+}
+
+.quickAccess{
+  position: sticky;
+  top: 84px;
+  align-self: start;
+}
+
+.quickAccessCard{
+  max-width: 100%;
+  overflow-x: hidden;
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  backdrop-filter: blur(10px);
+  border: 0.5px solid color-mix(in srgb, var(--border) 85%, transparent);
+  border-radius: 18px;
+  box-shadow: 0 14px 40px rgba(0,0,0,0.10);
+  padding: 12px;
+}
+
+.quickAccessTitle{
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .14px;
+  color: var(--muted);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.quickAccessBlock{
+  padding-top: 10px;
+  border-top: 0.5px solid color-mix(in srgb, var(--border) 85%, transparent);
+  margin-top: 10px;
+}
+
+.quickAccessBlockTitle{
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: .12px;
+  margin-bottom: 8px;
+}
+
+.quickAccessList{
+  display:flex;
+  flex-direction:column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.quickAccessRow{
+  display:flex;
+  align-items:center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.quickAccessItem{
+  flex: 1;
+  min-width: 0;
+  max-width: 100%;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+  border: 0.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 12px;
+  padding: 8px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  text-align:left;
+}
+
+.quickAccessItem:hover{
+  background: color-mix(in srgb, var(--surface2) 65%, var(--surface));
+}
+
+.quickAccessItemLabel{
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quickAccessFavBtn{
+  width: 34px;
+  height: 32px;
+  border-radius: 10px;
+  border: 0.5px solid var(--border);
+  background: var(--surface);
+  color: color-mix(in srgb, var(--muted) 75%, var(--text));
+  cursor: pointer;
+}
+
+.quickAccessFavBtn:hover{
+  background: color-mix(in srgb, var(--surface2) 65%, var(--surface));
+}
+
+.quickAccessFavBtn.isOn{
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 45%, var(--border));
+  background: color-mix(in srgb, var(--warnBg) 65%, var(--surface));
+}
+
+.quickAccessItemStar{
+  color: var(--warn);
+  font-size: 12px;
+}
+
+.quickAccessEmpty{
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.quickAccessMobileBtn{
+  display:none;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 0.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.qaModal{
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0,0,0,0.45);
+  display:flex;
+  align-items:flex-end;
+  justify-content:center;
+  padding: 12px;
+  overflow-x: hidden;
+}
+
+.qaModalPanel{
+  width: min(520px, 100%);
+  max-width: 100%;
+  max-height: 82vh;
+  overflow:auto;
+  overflow-x: hidden;
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 18px 60px rgba(0,0,0,0.22);
+  padding: 12px;
+}
+
+.qaModalHeader{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 0.5px solid var(--border);
+  margin-bottom: 10px;
+}
+
+.qaModalTitle{
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .1px;
+}
+
 .topbar{
   position: sticky;
   top: 10px;
@@ -83,6 +266,19 @@ a{ color:inherit; text-decoration:none; }
   align-items: flex-end;
   justify-content: space-between;
   gap: 14px;
+}
+
+.topbarHidden{
+  transform: translateY(-120%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (max-width: 640px){
+  .topbar{
+    transition: transform 180ms ease, opacity 180ms ease;
+    will-change: transform;
+  }
 }
 
 .title{
@@ -247,11 +443,17 @@ a{ color:inherit; text-decoration:none; }
   margin-top: 12px;
 }
 
+.twoCol > *{
+  min-width: 0;
+}
+
 .miniCard{
   background: color-mix(in srgb, var(--surface2) 92%, transparent);
   border-radius: var(--radius);
   padding: 10px 12px;
   border: 0.5px solid color-mix(in srgb, var(--border) 80%, transparent);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .miniHeader{
@@ -371,8 +573,17 @@ a{ color:inherit; text-decoration:none; }
 .barRowBar{ background: var(--surface); border: 0.5px solid var(--border); border-radius: 10px; overflow:hidden; height: 22px; }
 .barRowBar > div{ height:100%; display:flex; align-items:center; justify-content:flex-end; padding-right: 8px; color: var(--text); font-size: 11px; font-weight: 500; }
 
-.vbars{ display:flex; gap: 10px; align-items:flex-end; height: 180px; padding: 8px 0 0; }
-.vbarItem{ flex: 1; min-width: 0; display:flex; flex-direction:column; align-items:center; gap: 6px; }
+.vbars{
+  display:flex;
+  gap: 10px;
+  align-items:flex-end;
+  height: 180px;
+  padding: 8px 0 6px;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.vbarItem{ flex: 1; min-width: 44px; display:flex; flex-direction:column; align-items:center; gap: 6px; }
 .vbarValue{ font-size: 11px; color: var(--text); }
 .vbar{ width: 100%; height: 140px; background: var(--surface); border: 0.5px solid var(--border); border-radius: 10px; display:flex; align-items:flex-end; overflow:hidden; }
 .vbar > div{ width: 100%; }
@@ -553,6 +764,8 @@ a{ color:inherit; text-decoration:none; }
   border: 0.5px solid color-mix(in srgb, var(--border) 55%, transparent);
   border-radius: var(--radius);
   padding: 12px;
+  min-width: 0;
+  max-width: 100%;
   box-shadow:
     0 12px 34px rgba(0,0,0,0.08),
     inset 0 1px 0 rgba(255,255,255,0.06);
@@ -632,6 +845,7 @@ table{
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   border-radius: 12px;
+  max-width: 100%;
 }
 
 .tableScroll table{
@@ -682,6 +896,7 @@ tr:hover td{
   .topbarMeta{ font-size: 11px; }
   .chipRow{ justify-content:flex-start; }
   .chip{ width: 100%; justify-content: space-between; }
+  .quickAccessMobileBtn{ display:inline-flex; align-items:center; justify-content:center; width: 100%; }
   .selectInput{ max-width: 60vw; }
   .dateInput{ width: 100%; }
   .card{ grid-column: span 12; }
@@ -696,6 +911,8 @@ tr:hover td{
   .vbars{ height: 160px; }
   .vbar{ height: 120px; }
   .lineMini{ height: 120px; }
+  .dashboardLayout{ grid-template-columns: 1fr; }
+  .quickAccess{ display:none; }
 }
 
 /* Utilities for semantic colors */

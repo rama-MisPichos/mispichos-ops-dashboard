@@ -3,6 +3,26 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CancellationReasonBucket, OpsDashboardResponse, PetshopMetrics, SinDespacharRow } from "@/lib/data/mockOpsDashboard";
 
+type QuickAccessItem = {
+  topic: string;
+  id: string; // DOM anchor id
+  label: string;
+};
+
+const QUICK_ACCESS: QuickAccessItem[] = [
+  { topic: "En vivo", id: "ops-live", label: "KPIs operativos" },
+  { topic: "En vivo", id: "sl-live", label: "Service level (SL)" },
+  { topic: "En vivo", id: "top3", label: "Top 3 petshops" },
+  { topic: "Incidencias", id: "reprogramar", label: "Pedidos a reprogramar" },
+  { topic: "Incidencias", id: "sin-despachar", label: "Demorado sin despachar" },
+  { topic: "Operación", id: "demoras", label: "Demoras 1ra/2da vuelta" },
+  { topic: "Operación", id: "estancados", label: "Estancados / Cierres manuales" },
+  { topic: "Riesgo", id: "cancelados", label: "Cancelados" },
+  { topic: "Riesgo", id: "spliteados", label: "Pedidos spliteados" },
+  { topic: "Post-venta", id: "soluciones", label: "Soluciones / Devoluciones / Retiros" },
+  { topic: "Capacidad", id: "capacidad", label: "Capacidad logística" },
+];
+
 function ymd(d: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -590,9 +610,117 @@ export default function DashboardClient() {
 
   const viewPillText = petshopId === "ALL" ? "Vista global" : activePetshop?.name ?? "Petshop";
 
+  const favoritesStorageKey = "opsQuickAccess:favorites:v1";
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  const [quickAccessOpen, setQuickAccessOpen] = useState(false);
+  const [topbarHidden, setTopbarHidden] = useState(false);
+  const lastScrollYRef = useRef(0);
+  const rafRef = useRef<number | null>(null);
+  const isMobileRef = useRef(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(favoritesStorageKey);
+      const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+      if (Array.isArray(parsed) && parsed.every((x) => typeof x === "string")) {
+        setFavoriteIds(parsed);
+      }
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(favoritesStorageKey, JSON.stringify(favoriteIds));
+    } catch {
+      // ignore
+    }
+  }, [favoriteIds]);
+
+  const quickAccessByTopic = useMemo(() => {
+    const map = new Map<string, QuickAccessItem[]>();
+    for (const item of QUICK_ACCESS) {
+      const list = map.get(item.topic) ?? [];
+      list.push(item);
+      map.set(item.topic, list);
+    }
+    return Array.from(map.entries());
+  }, []);
+
+  const favoriteItems = useMemo(() => {
+    const idx = new Map(QUICK_ACCESS.map((x) => [x.id, x]));
+    return favoriteIds.map((id) => idx.get(id)).filter(Boolean) as QuickAccessItem[];
+  }, [favoriteIds]);
+
+  function scrollToId(id: string) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function goToAndClose(id: string) {
+    scrollToId(id);
+    setQuickAccessOpen(false);
+  }
+
+  function toggleFavorite(id: string) {
+    setFavoriteIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 640px)");
+    const syncMobile = () => {
+      isMobileRef.current = mq.matches;
+      if (!mq.matches) setTopbarHidden(false);
+    };
+    syncMobile();
+
+    // Safari compatibility for matchMedia listeners
+    const hasAddEvent = typeof (mq as MediaQueryList).addEventListener === "function";
+    const add = hasAddEvent ? "addEventListener" : "addListener";
+    const remove = hasAddEvent ? "removeEventListener" : "removeListener";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (mq as any)[add]("change", syncMobile);
+
+    lastScrollYRef.current = window.scrollY || 0;
+
+    const onScroll = () => {
+      if (!isMobileRef.current) return;
+      if (quickAccessOpen) return;
+
+      if (rafRef.current != null) return;
+      rafRef.current = window.requestAnimationFrame(() => {
+        rafRef.current = null;
+        const y = window.scrollY || 0;
+        const prev = lastScrollYRef.current;
+        const delta = y - prev;
+
+        if (Math.abs(delta) < 6) return;
+
+        if (delta > 0) {
+          if (y > 60) setTopbarHidden(true);
+        } else {
+          setTopbarHidden(false);
+        }
+
+        lastScrollYRef.current = y;
+      });
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (mq as any)[remove]("change", syncMobile);
+      if (rafRef.current != null) window.cancelAnimationFrame(rafRef.current);
+    };
+  }, [quickAccessOpen]);
+
   return (
     <main className="container">
-      <div className="topbar">
+      <div className={`topbar ${topbarHidden ? "topbarHidden" : ""}`}>
         <div className="title">
           <h1>Operaciones · MisPichos</h1>
           <p className="topbarMeta">
@@ -601,6 +729,9 @@ export default function DashboardClient() {
           </p>
         </div>
         <div className="chipRow">
+          <button type="button" className="btn quickAccessMobileBtn" onClick={() => setQuickAccessOpen(true)}>
+            Accesos
+          </button>
           <label className="chip">
             <span>Petshop</span>
             <select className="selectInput" value={petshopId} onChange={(e) => setPetshopId(e.target.value)}>
@@ -624,7 +755,118 @@ export default function DashboardClient() {
         </div>
       </div>
 
-      <div className="section">
+      {quickAccessOpen ? (
+        <div className="qaModal" role="dialog" aria-modal="true" aria-label="Accesos rápidos" onClick={() => setQuickAccessOpen(false)}>
+          <div className="qaModalPanel" onClick={(e) => e.stopPropagation()}>
+            <div className="qaModalHeader">
+              <div className="qaModalTitle">Accesos</div>
+              <button type="button" className="btn btnIcon" onClick={() => setQuickAccessOpen(false)} aria-label="Cerrar">
+                ✕
+              </button>
+            </div>
+
+            <div className="quickAccessBlock" style={{ borderTop: "none", marginTop: 0, paddingTop: 0 }}>
+              <div className="quickAccessBlockTitle">Mis accesos</div>
+              {favoriteItems.length ? (
+                <div className="quickAccessList">
+                  {favoriteItems.map((it) => (
+                    <button key={`fav-m-${it.id}`} type="button" className="quickAccessItem" onClick={() => goToAndClose(it.id)}>
+                      <span className="quickAccessItemLabel">{it.label}</span>
+                      <span className="quickAccessItemStar" aria-hidden="true">
+                        ★
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="quickAccessEmpty">Marcá ★ en un tópico para fijarlo acá.</div>
+              )}
+            </div>
+
+            {quickAccessByTopic.map(([topic, items]) => (
+              <div key={`m-${topic}`} className="quickAccessBlock">
+                <div className="quickAccessBlockTitle">{topic}</div>
+                <div className="quickAccessList">
+                  {items.map((it) => {
+                    const isFav = favoriteIds.includes(it.id);
+                    return (
+                      <div key={`m-${it.id}`} className="quickAccessRow">
+                        <button type="button" className="quickAccessItem" onClick={() => goToAndClose(it.id)}>
+                          <span className="quickAccessItemLabel">{it.label}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`quickAccessFavBtn ${isFav ? "isOn" : ""}`}
+                          onClick={() => toggleFavorite(it.id)}
+                          aria-label={isFav ? "Quitar de favoritos" : "Agregar a favoritos"}
+                          title={isFav ? "Quitar de favoritos" : "Agregar a favoritos"}
+                        >
+                          ★
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="dashboardLayout">
+        <aside className="quickAccess" aria-label="Accesos rápidos">
+          <div className="quickAccessCard">
+            <div className="quickAccessTitle">Accesos</div>
+
+            <div className="quickAccessBlock">
+              <div className="quickAccessBlockTitle">Mis accesos</div>
+              {favoriteItems.length ? (
+                <div className="quickAccessList">
+                  {favoriteItems.map((it) => (
+                    <button key={`fav-${it.id}`} type="button" className="quickAccessItem" onClick={() => scrollToId(it.id)}>
+                      <span className="quickAccessItemLabel">{it.label}</span>
+                      <span className="quickAccessItemStar" aria-hidden="true">
+                        ★
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="quickAccessEmpty">Marcá ★ en un tópico para fijarlo acá.</div>
+              )}
+            </div>
+
+            {quickAccessByTopic.map(([topic, items]) => (
+              <div key={topic} className="quickAccessBlock">
+                <div className="quickAccessBlockTitle">{topic}</div>
+                <div className="quickAccessList">
+                  {items.map((it) => {
+                    const isFav = favoriteIds.includes(it.id);
+                    return (
+                      <div key={it.id} className="quickAccessRow">
+                        <button type="button" className="quickAccessItem" onClick={() => scrollToId(it.id)}>
+                          <span className="quickAccessItemLabel">{it.label}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`quickAccessFavBtn ${isFav ? "isOn" : ""}`}
+                          onClick={() => toggleFavorite(it.id)}
+                          aria-label={isFav ? "Quitar de favoritos" : "Agregar a favoritos"}
+                          title={isFav ? "Quitar de favoritos" : "Agregar a favoritos"}
+                        >
+                          ★
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </aside>
+
+        <div className="dashboardMain">
+          <section className="section" id="ops-live">
         <div className="sectionHeader">
           <div>
             <h2>Órdenes de transacción (en vivo)</h2>
@@ -745,9 +987,9 @@ export default function DashboardClient() {
             />
           </div>
         </div>
-      </div>
+          </section>
 
-      <section className="section">
+      <section className="section" id="sl-live">
         <div className="sectionHeader">
           <div>
             <h2>Service level (SL) en tiempo real</h2>
@@ -788,7 +1030,7 @@ export default function DashboardClient() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section" id="top3">
         <div className="sectionHeader">
           <div>
             <h2>Top 3 petshops del día</h2>
@@ -816,7 +1058,7 @@ export default function DashboardClient() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section" id="reprogramar">
         <div className="sectionHeader">
           <div>
             <h2>Pedidos a reprogramar</h2>
@@ -906,7 +1148,7 @@ export default function DashboardClient() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section" id="sin-despachar">
         <div className="sectionHeader">
           <div>
             <h2>Demorado sin despachar</h2>
@@ -1000,7 +1242,7 @@ export default function DashboardClient() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section" id="demoras">
         <div className="sectionHeader">
           <div>
             <h2>Demoras 1ra vuelta y 2da vuelta</h2>
@@ -1023,7 +1265,7 @@ export default function DashboardClient() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section" id="estancados">
         <div className="sectionHeader">
           <div>
             <h2>Estancados y Cerrados manualmente</h2>
@@ -1071,7 +1313,7 @@ export default function DashboardClient() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section" id="cancelados">
         <div className="sectionHeader">
           <div>
             <h2>Cancelados</h2>
@@ -1112,7 +1354,7 @@ export default function DashboardClient() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section" id="spliteados">
         <div className="sectionHeader">
           <div>
             <h2>
@@ -1127,7 +1369,7 @@ export default function DashboardClient() {
         <VerticalBars items={splitPctBars} color="var(--info)" valueFormatter={(n) => `${n}%`} />
       </section>
 
-      <section className="section">
+      <section className="section" id="soluciones">
         <div className="sectionHeader">
           <div>
             <h2>Soluciones, devoluciones y retiros</h2>
@@ -1158,7 +1400,7 @@ export default function DashboardClient() {
         />
       </section>
 
-      <section className="section">
+      <section className="section" id="capacidad">
         <div className="sectionHeader">
           <div>
             <h2>Capacidad logística</h2>
@@ -1255,6 +1497,8 @@ export default function DashboardClient() {
           </div>
         </div>
       </section>
+        </div>
+      </div>
     </main>
   );
 }
