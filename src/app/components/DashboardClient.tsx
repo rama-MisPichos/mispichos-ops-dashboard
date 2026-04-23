@@ -275,7 +275,7 @@ function LineMini({
   );
 }
 
-function CopyButton({ getTsv }: { getTsv: () => string }) {
+function CopyButton({ getText }: { getText: () => string }) {
   const [copied, setCopied] = useState(false);
   const tRef = useRef<number | null>(null);
 
@@ -286,7 +286,7 @@ function CopyButton({ getTsv }: { getTsv: () => string }) {
   }, []);
 
   async function onCopy() {
-    await navigator.clipboard.writeText(getTsv());
+    await navigator.clipboard.writeText(getText());
     setCopied(true);
     if (tRef.current) window.clearTimeout(tRef.current);
     tRef.current = window.setTimeout(() => setCopied(false), 1800);
@@ -297,6 +297,79 @@ function CopyButton({ getTsv }: { getTsv: () => string }) {
       {copied ? "Copiado!" : "Copiar registros"}
     </button>
   );
+}
+
+function escapeMdCell(s: string) {
+  return s.replaceAll("|", "\\|").replaceAll("\n", " ").trim();
+}
+
+function toMarkdownTable(headers: string[], rows: string[][]) {
+  const h = `| ${headers.map(escapeMdCell).join(" | ")} |`;
+  const sep = `| ${headers.map(() => "---").join(" | ")} |`;
+  const body = rows.map((r) => `| ${r.map((c) => escapeMdCell(c)).join(" | ")} |`);
+  return [h, sep, ...body].join("\n");
+}
+
+function padRight(s: string, w: number) {
+  if (s.length >= w) return s;
+  return s + " ".repeat(w - s.length);
+}
+
+function clip(s: string, max: number) {
+  if (s.length <= max) return s;
+  if (max <= 1) return s.slice(0, max);
+  return s.slice(0, Math.max(1, max - 1)) + "…";
+}
+
+function toFixedWidthTable(
+  headers: string[],
+  rows: string[][],
+  opts?: { maxColWidths?: number[]; wrapInCodeBlock?: boolean },
+) {
+  const maxColWidths = opts?.maxColWidths ?? headers.map(() => 24);
+  const wrap = opts?.wrapInCodeBlock ?? true;
+
+  const clippedHeaders = headers.map((h, i) => clip(h, maxColWidths[i] ?? 24));
+  const clippedRows = rows.map((r) => r.map((c, i) => clip(c ?? "", maxColWidths[i] ?? 24)));
+
+  const widths = headers.map((_, i) => {
+    const w0 = clippedHeaders[i]?.length ?? 0;
+    const w1 = Math.max(0, ...clippedRows.map((r) => (r[i] ?? "").length));
+    return Math.min(maxColWidths[i] ?? 24, Math.max(w0, w1));
+  });
+
+  const line = (cells: string[]) => cells.map((c, i) => padRight(c ?? "", widths[i] ?? 0)).join(" | ");
+  const sep = widths.map((w) => "-".repeat(Math.max(3, w))).join("-|-");
+
+  const out = [line(clippedHeaders), sep, ...clippedRows.map(line)].join("\n");
+  return wrap ? "```" + "\n" + out + "\n" + "```" : out;
+}
+
+function csvEscape(s: string, sep: "," | ";" = ";") {
+  const needsQuotes = s.includes('"') || s.includes("\n") || s.includes("\r") || s.includes(sep);
+  const v = s.replaceAll('"', '""');
+  return needsQuotes ? `"${v}"` : v;
+}
+
+function toCsv(headers: string[], rows: string[][], sep: "," | ";" = ";") {
+  const lines = [
+    headers.map((h) => csvEscape(h, sep)).join(sep),
+    ...rows.map((r) => r.map((c) => csvEscape(c, sep)).join(sep)),
+  ];
+  // UTF-8 BOM helps Excel on Windows
+  return "\uFEFF" + lines.join("\n");
+}
+
+function downloadTextFile(filename: string, content: string, mime: string) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 function kpiDeltaText(deltaPct: number) {
@@ -1196,22 +1269,39 @@ export default function DashboardClient() {
               </button>
             </div>
             <CopyButton
-              getTsv={() => {
-                const header = ["#pedido", "fecha_y_hora", "franja", "cliente", "domicilio", "producto", "petshop"].join("\t");
-                const lines = reprogramarRows.map((r) =>
-                  [
-                    r.orderId,
-                    new Date(r.createdAt).toLocaleString("es-AR"),
-                    r.deliveryWindow ?? "",
-                    r.customer,
-                    r.address,
-                    r.product,
-                    r.petshopName ?? "",
-                  ].join("\t"),
-                );
-                return [header, ...lines].join("\n");
+              getText={() => {
+                const headers = ["#pedido", "fecha y hora", "franja", "cliente", "domicilio", "producto", "petshop"];
+                const rows = reprogramarRows.map((r) => [
+                  r.orderId,
+                  new Date(r.createdAt).toLocaleString("es-AR"),
+                  r.deliveryWindow ?? "",
+                  r.customer,
+                  r.address,
+                  r.product,
+                  r.petshopName ?? "",
+                ]);
+                return toFixedWidthTable(headers, rows, { maxColWidths: [9, 19, 7, 18, 22, 26, 16], wrapInCodeBlock: true });
               }}
             />
+            <button
+              className="btn"
+              type="button"
+              onClick={() => {
+                const headers = ["pedido", "fecha_y_hora", "franja", "cliente", "domicilio", "producto", "petshop"];
+                const rows = reprogramarRows.map((r) => [
+                  r.orderId,
+                  new Date(r.createdAt).toLocaleString("es-AR"),
+                  r.deliveryWindow ?? "",
+                  r.customer,
+                  r.address,
+                  r.product,
+                  r.petshopName ?? "",
+                ]);
+                downloadTextFile(`pedidos_a_reprogramar_${from}_${to}.csv`, toCsv(headers, rows, ";"), "text/csv;charset=utf-8");
+              }}
+            >
+              Descargar Excel
+            </button>
           </div>
         </div>
         <div className="tableScroll">
@@ -1286,23 +1376,41 @@ export default function DashboardClient() {
               </button>
             </div>
             <CopyButton
-              getTsv={() => {
-                const header = ["#pedido", "etiqueta_impresa", "franja", "cliente", "domicilio", "producto", "petshop", "horas_espera"].join("\t");
-                const lines = sinDespacharRows.map((r) =>
-                  [
-                    r.orderId,
-                    new Date(r.labelPrintedAt).toLocaleString("es-AR"),
-                    r.deliveryWindow ?? "",
-                    r.customer,
-                    r.address,
-                    r.product,
-                    r.petshopName ?? "",
-                    `${round0(r.waitHours)}h`,
-                  ].join("\t"),
-                );
-                return [header, ...lines].join("\n");
+              getText={() => {
+                const headers = ["#pedido", "etiqueta impresa", "franja", "cliente", "domicilio", "producto", "petshop", "horas espera"];
+                const rows = sinDespacharRows.map((r) => [
+                  r.orderId,
+                  new Date(r.labelPrintedAt).toLocaleString("es-AR"),
+                  r.deliveryWindow ?? "",
+                  r.customer,
+                  r.address,
+                  r.product,
+                  r.petshopName ?? "",
+                  `${round0(r.waitHours)}h`,
+                ]);
+                return toFixedWidthTable(headers, rows, { maxColWidths: [9, 19, 7, 18, 22, 26, 16, 11], wrapInCodeBlock: true });
               }}
             />
+            <button
+              className="btn"
+              type="button"
+              onClick={() => {
+                const headers = ["pedido", "etiqueta_impresa", "franja", "cliente", "domicilio", "producto", "petshop", "horas_espera"];
+                const rows = sinDespacharRows.map((r) => [
+                  r.orderId,
+                  new Date(r.labelPrintedAt).toLocaleString("es-AR"),
+                  r.deliveryWindow ?? "",
+                  r.customer,
+                  r.address,
+                  r.product,
+                  r.petshopName ?? "",
+                  String(round0(r.waitHours)),
+                ]);
+                downloadTextFile(`demorado_sin_despachar_${from}_${to}.csv`, toCsv(headers, rows, ";"), "text/csv;charset=utf-8");
+              }}
+            >
+              Descargar Excel
+            </button>
           </div>
         </div>
         <div className="tableScroll">
