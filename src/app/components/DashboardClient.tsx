@@ -173,7 +173,7 @@ function VerticalBars({
   color,
   valueFormatter,
 }: {
-  items: { id: string; label: string; value: number }[];
+  items: { id: string; label: string; value: number; meta?: string }[];
   color: string;
   valueFormatter?: (n: number) => string;
 }) {
@@ -181,8 +181,9 @@ function VerticalBars({
   return (
     <div className="vbars">
       {items.map((it) => (
-        <div key={it.id} className="vbarItem" title={`${it.label}: ${valueFormatter ? valueFormatter(it.value) : it.value}`}>
+        <div key={it.id} className="vbarItem" title={`${it.label}: ${valueFormatter ? valueFormatter(it.value) : it.value}${it.meta ? ` · ${it.meta}` : ""}`}>
           <div className="vbarValue mono">{valueFormatter ? valueFormatter(it.value) : it.value}</div>
+          {it.meta ? <div className="vbarMeta mono">{it.meta}</div> : null}
           <div className="vbar">
             <div style={{ height: `${(it.value / max) * 100}%`, background: color }} />
           </div>
@@ -304,8 +305,10 @@ function kpiDeltaText(deltaPct: number) {
 }
 
 function deltaColor(deltaPct: number) {
-  if (deltaPct > 0) return "var(--ok)";
-  if (deltaPct < 0) return "var(--bad)";
+  // Keep color consistent with what we display (rounded %).
+  const r = round0(deltaPct);
+  if (r > 0) return "var(--ok)";
+  if (r < 0) return "var(--bad)";
   return "var(--muted)";
 }
 
@@ -512,7 +515,7 @@ export default function DashboardClient() {
   const cancelPctBars = useMemo(() => {
     if (!data) return [];
     const rows = data.metricsByPetshop
-      .map((m) => ({ id: m.petshopId, label: m.petshopName, value: round0(m.cancelPct) }))
+      .map((m) => ({ id: m.petshopId, label: m.petshopName, value: round0(m.cancelPct), meta: m.cancel.toLocaleString("es-AR") }))
       .sort((a, b) => b.value - a.value);
     if (petshopId === "ALL") return rows;
     return rows.filter((r) => r.id === petshopId);
@@ -610,6 +613,8 @@ export default function DashboardClient() {
 
   const viewPillText = petshopId === "ALL" ? "Vista global" : activePetshop?.name ?? "Petshop";
 
+  const [totalDeltaPct, setTotalDeltaPct] = useState<number | null>(null);
+
   const favoritesStorageKey = "opsQuickAccess:favorites:v1";
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [quickAccessOpen, setQuickAccessOpen] = useState(false);
@@ -617,6 +622,9 @@ export default function DashboardClient() {
   const lastScrollYRef = useRef(0);
   const rafRef = useRef<number | null>(null);
   const isMobileRef = useRef(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const themeStorageKey = "opsTheme:v1";
+  const [theme, setTheme] = useState<"light" | "dark">("light");
 
   useEffect(() => {
     try {
@@ -638,6 +646,21 @@ export default function DashboardClient() {
       // ignore
     }
   }, [favoriteIds]);
+
+  useEffect(() => {
+    // Stable mock delta: changes only when context changes, not on re-renders (e.g. theme toggle)
+    if (!metricsSelected) {
+      setTotalDeltaPct(null);
+      return;
+    }
+    // Keep it deterministic-ish and stable for a given context
+    const key = `${petshopId}|${from}|${to}`;
+    let hash = 0;
+    for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) | 0;
+    const r01 = (Math.abs(hash) % 1000) / 1000; // 0..0.999
+    const delta = (r01 - 0.4) * 20;
+    setTotalDeltaPct(delta);
+  }, [metricsSelected, petshopId, from, to]);
 
   const quickAccessByTopic = useMemo(() => {
     const map = new Map<string, QuickAccessItem[]>();
@@ -673,6 +696,7 @@ export default function DashboardClient() {
     const mq = window.matchMedia("(max-width: 640px)");
     const syncMobile = () => {
       isMobileRef.current = mq.matches;
+      setIsMobile(mq.matches);
       if (!mq.matches) setTopbarHidden(false);
     };
     syncMobile();
@@ -718,6 +742,26 @@ export default function DashboardClient() {
     };
   }, [quickAccessOpen]);
 
+  useEffect(() => {
+    try {
+      // Always start in light mode on page load.
+      setTheme("light");
+      document.documentElement.dataset.theme = "light";
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(themeStorageKey, theme);
+      document.documentElement.dataset.theme = theme;
+    } catch {
+      // ignore
+    }
+  }, [theme]);
+
   return (
     <main className="container">
       <div className={`topbar ${topbarHidden ? "topbarHidden" : ""}`}>
@@ -731,6 +775,18 @@ export default function DashboardClient() {
         <div className="chipRow">
           <button type="button" className="btn quickAccessMobileBtn" onClick={() => setQuickAccessOpen(true)}>
             Accesos
+          </button>
+          <button
+            type="button"
+            className={`themeToggle ${theme === "dark" ? "isDark" : "isLight"}`}
+            onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+            aria-label={theme === "dark" ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
+            title={theme === "dark" ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
+          >
+            <span className="themeToggleIcon" aria-hidden="true">
+              {theme === "dark" ? "🌙" : "☀️"}
+            </span>
+            <span className="themeToggleText">{theme === "dark" ? "Oscuro" : "Claro"}</span>
           </button>
           <label className="chip">
             <span>Petshop</span>
@@ -880,10 +936,11 @@ export default function DashboardClient() {
             <div className="kpiValue">{metricsSelected ? metricsSelected.total.toLocaleString("es-AR") : "—"}</div>
             <div className="kpiSub">
               {metricsSelected ? (
-                (() => {
-                  const delta = (Math.random() - 0.4) * 20;
-                  return <span style={{ color: deltaColor(delta) }}>{kpiDeltaText(delta)}</span>;
-                })()
+                totalDeltaPct != null ? (
+                  <span style={{ color: deltaColor(totalDeltaPct) }}>{kpiDeltaText(totalDeltaPct)}</span>
+                ) : (
+                  "—"
+                )
               ) : (
                 "—"
               )}
@@ -997,36 +1054,69 @@ export default function DashboardClient() {
           </div>
         </div>
         <div className="tableScroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Petshop</th>
-                <th>Creadas</th>
-                <th>Entregadas</th>
-                <th>SL %</th>
-                <th>Progreso</th>
-                <th>Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {slRows.map((r) => (
-                <tr key={r.petshopId}>
-                  <td>{r.petshopName}</td>
-                  <td className="mono">{r.total.toLocaleString("es-AR")}</td>
-                  <td className="mono">{r.delivered.toLocaleString("es-AR")}</td>
-                  <td style={{ color: r.slPct >= 90 ? "var(--ok)" : r.slPct >= 85 ? "var(--warn)" : "var(--bad)" }}>
-                    {formatPct0(r.slPct)}
-                  </td>
-                  <td>
-                    <SlProgress slPct={r.slPct} />
-                  </td>
-                  <td>
-                    <span className={badgeClassBySl(r.slPct)}>{slStatus(r.slPct)}</span>
-                  </td>
+          {isMobile ? (
+            <table>
+              <thead>
+                <tr>
+                  <th>Petshop</th>
+                  <th>SL %</th>
+                  <th>Estado</th>
+                  <th>Creadas</th>
+                  <th>Entregadas</th>
+                  <th>Progreso</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {slRows.map((r) => (
+                  <tr key={r.petshopId}>
+                    <td>{r.petshopName}</td>
+                    <td style={{ color: r.slPct >= 90 ? "var(--ok)" : r.slPct >= 85 ? "var(--warn)" : "var(--bad)" }}>
+                      {formatPct0(r.slPct)}
+                    </td>
+                    <td>
+                      <span className={badgeClassBySl(r.slPct)}>{slStatus(r.slPct)}</span>
+                    </td>
+                    <td className="mono">{r.total.toLocaleString("es-AR")}</td>
+                    <td className="mono">{r.delivered.toLocaleString("es-AR")}</td>
+                    <td>
+                      <SlProgress slPct={r.slPct} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <table>
+              <thead>
+                <tr>
+                  <th>Petshop</th>
+                  <th>Creadas</th>
+                  <th>Entregadas</th>
+                  <th>SL %</th>
+                  <th>Progreso</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {slRows.map((r) => (
+                  <tr key={r.petshopId}>
+                    <td>{r.petshopName}</td>
+                    <td className="mono">{r.total.toLocaleString("es-AR")}</td>
+                    <td className="mono">{r.delivered.toLocaleString("es-AR")}</td>
+                    <td style={{ color: r.slPct >= 90 ? "var(--ok)" : r.slPct >= 85 ? "var(--warn)" : "var(--bad)" }}>
+                      {formatPct0(r.slPct)}
+                    </td>
+                    <td>
+                      <SlProgress slPct={r.slPct} />
+                    </td>
+                    <td>
+                      <span className={badgeClassBySl(r.slPct)}>{slStatus(r.slPct)}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </section>
 
@@ -1043,16 +1133,31 @@ export default function DashboardClient() {
               <div className="rankCircle" data-rank={i + 1}>
                 {i + 1}
               </div>
-              <div className="top3Main">
-                <div className="top3Name">{t0.petshopName}</div>
-                <div className="bar" aria-hidden="true">
-                  <div style={{ width: `${clamp(t0.pct, 0, 100)}%`, background: "var(--info)" }} />
+              {isMobile ? (
+                <div className="top3Main">
+                  <div className="top3Name">{t0.petshopName}</div>
+                  <div className="bar" aria-hidden="true">
+                    <div style={{ width: `${clamp(t0.pct, 0, 100)}%`, background: "var(--info)" }} />
+                  </div>
+                  <div className="top3MetaRow">
+                    <div className="mono">{formatPct0(t0.pct)}</div>
+                    <div className="mono">{t0.orders.toLocaleString("es-AR")} pedidos</div>
+                  </div>
                 </div>
-              </div>
-              <div className="top3Pct">
-                <div className="mono">{formatPct0(t0.pct)}</div>
-                <div className="sub mono">{t0.orders.toLocaleString("es-AR")} pedidos</div>
-              </div>
+              ) : (
+                <>
+                  <div className="top3Main">
+                    <div className="top3Name">{t0.petshopName}</div>
+                    <div className="bar" aria-hidden="true">
+                      <div style={{ width: `${clamp(t0.pct, 0, 100)}%`, background: "var(--info)" }} />
+                    </div>
+                  </div>
+                  <div className="top3Pct">
+                    <div className="mono">{formatPct0(t0.pct)}</div>
+                    <div className="sub mono">{t0.orders.toLocaleString("es-AR")} pedidos</div>
+                  </div>
+                </>
+              )}
             </div>
           ))}
         </div>
