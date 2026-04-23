@@ -684,6 +684,12 @@ export default function DashboardClient() {
     return { split, pct: round0(pct(split, total)) };
   }, [data?.metricsByPetshop]);
 
+  const splitSummary = useMemo(() => {
+    if (!metricsSelected) return null;
+    if (petshopId === "ALL") return { split: globalSplitBadge.split, pct0: globalSplitBadge.pct, total: metricsAll?.total ?? metricsSelected.total };
+    return { split: metricsSelected.split ?? 0, pct0: round0(metricsSelected.splitPct ?? 0), total: metricsSelected.total ?? 0 };
+  }, [globalSplitBadge.pct, globalSplitBadge.split, metricsAll?.total, metricsSelected, petshopId]);
+
   const viewPillText = petshopId === "ALL" ? "Vista global" : activePetshop?.name ?? "Petshop";
 
   const [totalDeltaPct, setTotalDeltaPct] = useState<number | null>(null);
@@ -1579,7 +1585,36 @@ export default function DashboardClient() {
             <p>Órdenes con 2+ pedidos de distintos petshops</p>
           </div>
         </div>
-        <VerticalBars items={splitPctBars} color="var(--info)" valueFormatter={(n) => `${n}%`} />
+        <div className="twoCol">
+          <div className="miniCard">
+            <div className="miniHeader">
+              <div className="miniTitle">Total spliteados</div>
+              <span className="pill badgeInfo">{splitSummary ? `${splitSummary.pct0}%` : "—"}</span>
+            </div>
+            <div className="kpi">
+              <div>
+                <div className="value mono">{splitSummary ? splitSummary.split.toLocaleString("es-AR") : "—"}</div>
+                <div className="sub">
+                  {splitSummary ? `sobre ${splitSummary.total.toLocaleString("es-AR")} pedidos` : "—"}
+                </div>
+              </div>
+            </div>
+            {splitSummary ? (
+              <div style={{ marginTop: 10 }}>
+                <div className="bar" aria-hidden="true">
+                  <div style={{ width: `${clamp(splitSummary.pct0, 0, 100)}%`, background: "var(--info)" }} />
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="miniCard">
+            <div className="miniHeader">
+              <div className="miniTitle">% spliteados por petshop</div>
+            </div>
+            <VerticalBars items={splitPctBars} color="var(--info)" valueFormatter={(n) => `${n}%`} />
+          </div>
+        </div>
       </section>
 
       <section className="section" id="soluciones">

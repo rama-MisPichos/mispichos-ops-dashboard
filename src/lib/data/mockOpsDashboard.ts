@@ -40,12 +40,11 @@ export type ManualCloseBucket = { t: string; count: number };
 export type CapacityHourBucket = { hour: number; used: number };
 
 export type CancellationReasonKey =
-  | "customer_not_available"
-  | "bad_address"
-  | "out_of_stock"
-  | "payment_failed"
-  | "petshop_closed"
-  | "ops_error";
+  | "mispichos_fault"
+  | "no_payment"
+  | "duplicate_purchase"
+  | "petshop_fault"
+  | "customer_regrets"
 
 export type CancellationReasonBucket = {
   key: CancellationReasonKey;
@@ -54,12 +53,11 @@ export type CancellationReasonBucket = {
 };
 
 export const CANCELLATION_REASONS: { key: CancellationReasonKey; label: string }[] = [
-  { key: "customer_not_available", label: "Cliente no estaba" },
-  { key: "bad_address", label: "Dirección incorrecta" },
-  { key: "out_of_stock", label: "Sin stock" },
-  { key: "payment_failed", label: "Pago rechazado" },
-  { key: "petshop_closed", label: "Petshop cerrado" },
-  { key: "ops_error", label: "Error operativo" },
+  { key: "mispichos_fault", label: "Culpa de MisPichos" },
+  { key: "no_payment", label: "Falta de pago" },
+  { key: "duplicate_purchase", label: "Duplicada" },
+  { key: "petshop_fault", label: "Culpa de Petshop" },
+  { key: "customer_regrets", label: "Cliente se arrepiente" },
 ];
 
 export type PetshopMetrics = {
@@ -353,7 +351,7 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
       recurrent: Math.max(0, cancel - round0(cancel * (0.55 + rnd() * 0.2))),
     };
 
-    const cancelReasonWeights = [1.1, 0.9, 1.4, 1.0, 0.7, 0.6].map((w) => w * (0.85 + rnd() * 0.4));
+    const cancelReasonWeights = [1.1, 0.9, 1.4, 1.0, 0.7].map((w) => w * (0.85 + rnd() * 0.4));
     const cancelReasonCounts = distributeByWeights(cancel, cancelReasonWeights, rnd);
     const cancelReasons = CANCELLATION_REASONS.map((r0, i) => ({
       key: r0.key,
