@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CancellationReasonBucket, OpsDashboardResponse, PetshopMetrics, SinDespacharRow } from "@/lib/data/mockOpsDashboard";
+import AiRecommendations from "./AiRecommendations";
 
 type QuickAccessItem = {
   topic: string;
@@ -1258,6 +1259,8 @@ export default function DashboardClient() {
         </aside>
 
         <div className="dashboardMain">
+          <AiRecommendations data={data} from={from} to={to} />
+
           <section className="section" id="ops-live">
         <div className="sectionHeader">
           <div>
@@ -1482,6 +1485,7 @@ export default function DashboardClient() {
               bLabel="Fuera de tiempo"
               bValue={metricsSelected?.outTimeN ?? 0}
               bColor="var(--bad)"
+              legendLayout="twoCol"
             />
           </div>
         </div>
