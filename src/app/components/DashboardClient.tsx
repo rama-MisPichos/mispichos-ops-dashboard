@@ -141,6 +141,62 @@ function Doughnut({
   );
 }
 
+function PieSplit({
+  pct0,
+  aLabel,
+  aValue,
+  aColor,
+  bLabel,
+  bValue,
+  bColor,
+}: {
+  pct0: number; // 0..100 rounded
+  aLabel: string;
+  aValue: number;
+  aColor: string;
+  bLabel: string;
+  bValue: number;
+  bColor: string;
+}) {
+  const n = clamp(round0(pct0), 0, 100);
+  return (
+    <div className="pieWrap">
+      <div
+        className="pie"
+        role="img"
+        aria-label={`${aLabel} ${n}%`}
+        style={{
+          background: `conic-gradient(${aColor} 0 ${n}%, ${bColor} ${n}% 100%)`,
+        }}
+      />
+      <div className="pieLegend">
+        <div className="pieLegendItem">
+          <span className="legendSwatch" style={{ background: aColor }} />
+          <div className="pieLegendMain">
+            <div className="pieLegendTop">
+              <span>{aLabel}</span>
+              <span className="mono">
+                {n}% · {aValue.toLocaleString("es-AR")}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="pieLegendItem">
+          <span className="legendSwatch" style={{ background: bColor }} />
+          <div className="pieLegendMain">
+            <div className="pieLegendTop">
+              <span>{bLabel}</span>
+              <span className="mono">
+                {100 - n}% · {bValue.toLocaleString("es-AR")}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BarList({
   items,
   color,
@@ -181,11 +237,19 @@ function VerticalBars({
   return (
     <div className="vbars">
       {items.map((it) => (
-        <div key={it.id} className="vbarItem" title={`${it.label}: ${valueFormatter ? valueFormatter(it.value) : it.value}${it.meta ? ` · ${it.meta}` : ""}`}>
+        <div
+          key={it.id}
+          className="vbarItem"
+          title={`${it.label}: ${valueFormatter ? valueFormatter(it.value) : it.value}${it.meta ? ` · ${it.meta}` : ""}`}
+        >
           <div className="vbarValue mono">{valueFormatter ? valueFormatter(it.value) : it.value}</div>
           {it.meta ? <div className="vbarMeta mono">{it.meta}</div> : null}
           <div className="vbar">
-            <div style={{ height: `${(it.value / max) * 100}%`, background: color }} />
+            <div style={{ height: `${(it.value / max) * 100}%`, background: color, width: "100%" }} />
+          </div>
+          <div className="vbarUnder mono">
+            {valueFormatter ? valueFormatter(it.value) : it.value}
+            {it.meta ? ` · ${it.meta}` : ""}
           </div>
           <div className="vbarLabel">{it.label}</div>
         </div>
@@ -597,7 +661,7 @@ export default function DashboardClient() {
   const splitPctBars = useMemo(() => {
     if (!data) return [];
     const rows = data.metricsByPetshop
-      .map((m) => ({ id: m.petshopId, label: m.petshopName, value: round0(m.splitPct) }))
+      .map((m) => ({ id: m.petshopId, label: m.petshopName, value: round0(m.splitPct), meta: m.split.toLocaleString("es-AR") }))
       .sort((a, b) => b.value - a.value);
     if (petshopId === "ALL") return rows;
     return rows.filter((r) => r.id === petshopId);
@@ -1576,12 +1640,7 @@ export default function DashboardClient() {
       <section className="section" id="spliteados">
         <div className="sectionHeader">
           <div>
-            <h2>
-              Pedidos spliteados{" "}
-              <span className="pill badgeInfo">
-                {globalSplitBadge.split} · {globalSplitBadge.pct}%
-              </span>
-            </h2>
+            <h2>Pedidos spliteados</h2>
             <p>Órdenes con 2+ pedidos de distintos petshops</p>
           </div>
         </div>
@@ -1604,6 +1663,20 @@ export default function DashboardClient() {
                 <div className="bar" aria-hidden="true">
                   <div style={{ width: `${clamp(splitSummary.pct0, 0, 100)}%`, background: "var(--info)" }} />
                 </div>
+              </div>
+            ) : null}
+
+            {splitSummary ? (
+              <div style={{ marginTop: 12 }}>
+                <PieSplit
+                  pct0={splitSummary.pct0}
+                  aLabel="Spliteados"
+                  aValue={splitSummary.split}
+                  aColor="var(--info)"
+                  bLabel="No spliteados"
+                  bValue={Math.max(0, splitSummary.total - splitSummary.split)}
+                  bColor="color-mix(in srgb, var(--muted) 28%, var(--surface2))"
+                />
               </div>
             ) : null}
           </div>
