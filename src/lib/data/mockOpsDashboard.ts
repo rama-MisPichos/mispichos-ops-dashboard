@@ -2,6 +2,12 @@ export type Petshop = {
   id: string;
   name: string;
   active: boolean;
+  capacity: {
+    flexEnabled: boolean;
+    flexPerDay: number;
+    shortPerWindow: number;
+    shortEnabled: { "10-14": boolean; "14-18": boolean; "18-22": boolean };
+  };
 };
 
 export type OpsRowBase = {
@@ -9,7 +15,8 @@ export type OpsRowBase = {
   createdAt: string; // ISO
   customer: string;
   address: string;
-  deliveryWindow?: "10-14" | "14-18" | "18-22";
+  /** Franja corta o Flex (14–22) */
+  deliveryWindow?: "10-14" | "14-18" | "18-22" | "14-22";
   product: string;
   petshopId?: string; // undefined means "sin petshop" (caso estancado)
   petshopName?: string;
@@ -38,6 +45,8 @@ export type TimelineBucket = {
 export type ManualCloseBucket = { t: string; count: number };
 
 export type CapacityHourBucket = { hour: number; used: number };
+
+export type CapacityDayBucket = { t: string; used: number };
 
 export type CancellationReasonKey =
   | "mispichos_fault"
@@ -105,6 +114,8 @@ export type PetshopMetrics = {
   // Capacity
   capacityFlexHourly: CapacityHourBucket[];
   capacityFranjaHourly: CapacityHourBucket[];
+  capacityFlexDaily: CapacityDayBucket[];
+  capacityFranjaDaily: CapacityDayBucket[];
 };
 
 export type OpsDashboardResponse = {
@@ -117,7 +128,6 @@ export type OpsDashboardResponse = {
   sinDespacharRows: SinDespacharRow[];
   estancadosRows: EstancadoRow[];
   top3Petshops: { petshopId: string; petshopName: string; pct: number; orders: number }[];
-  capacityLimits: { flexPerDay: number; franjaPerDay: number };
 };
 
 function mulberry32(seed: number) {
@@ -190,7 +200,9 @@ function pad2(n: number) {
 }
 
 function pickDeliveryWindow(rnd: () => number): OpsRowBase["deliveryWindow"] {
-  return pick(rnd, ["10-14", "14-18", "18-22"] as const);
+  // Incluye Flex (14–22) para que también aparezca en registros.
+  // (No afecta KPIs; es solo el "tag" de la fila.)
+  return pick(rnd, ["10-14", "14-18", "18-22", "14-22"] as const);
 }
 
 function dateWithWindow(base: Date, win: OpsRowBase["deliveryWindow"], rnd: () => number) {
@@ -206,37 +218,25 @@ function orderIdNumeric(seed: number) {
   return String(1424413 + seed);
 }
 
-function buildCapacityHourly(rnd: () => number, limitPerDay: number): CapacityHourBucket[] {
-  // In real ops they rarely exceed capacity, so keep utilization under ~90% most days.
-  const util = 0.55 + rnd() * 0.33; // 55%..88%
-  const targetTotal = limitPerDay * util;
+function buildHourlyForHours(rnd: () => number, hours: number[], targetTotal: number): CapacityHourBucket[] {
+  if (!hours.length) return [];
+  const safeTarget = Math.max(0, targetTotal);
 
-  const weights: number[] = [];
-  for (let h = 0; h < 24; h++) {
-    const wave = Math.sin(((h - 8) / 24) * Math.PI * 2) * 0.5 + 0.5; // 0..1
+  const weights = hours.map((h) => {
+    const wave = Math.sin(((h - 12) / 24) * Math.PI * 2) * 0.5 + 0.5; // 0..1
     const noise = 0.75 + rnd() * 0.7;
-    weights.push(Math.max(0.05, wave * noise));
-  }
+    return Math.max(0.08, wave * noise);
+  });
   const sumW = weights.reduce((a, b) => a + b, 0) || 1;
+  const raw = hours.map((h, i) => ({ hour: h, used: (safeTarget * (weights[i] ?? 0)) / sumW }));
 
-  const hourly: CapacityHourBucket[] = weights.map((w, hour) => ({ hour, used: (w / sumW) * targetTotal }));
-
-  // Round to ints and keep sum close to target without exceeding limit.
-  const rounded = hourly.map((b) => ({ ...b, used: Math.max(0, Math.floor(b.used)) }));
-  let diff = Math.max(0, Math.floor(targetTotal) - rounded.reduce((a, b) => a + b.used, 0));
+  const rounded = raw.map((b) => ({ hour: b.hour, used: Math.max(0, Math.floor(b.used)) }));
+  let diff = Math.max(0, Math.floor(safeTarget) - rounded.reduce((a, b) => a + b.used, 0));
   while (diff > 0) {
-    const h = Math.floor(rnd() * 24);
-    rounded[h]!.used += 1;
+    const k = Math.floor(rnd() * rounded.length);
+    rounded[k]!.used += 1;
     diff -= 1;
   }
-
-  const sumRounded = rounded.reduce((a, b) => a + b.used, 0);
-  const maxAllowed = Math.floor(limitPerDay * 0.93);
-  if (sumRounded > maxAllowed) {
-    const ratio = maxAllowed / sumRounded;
-    return rounded.map((b) => ({ hour: b.hour, used: Math.floor(b.used * ratio) }));
-  }
-
   return rounded;
 }
 
@@ -245,18 +245,73 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
   const now = new Date();
 
   const petshops: Petshop[] = [
-    { id: "farmapet_city", name: "Farmapet City", active: true },
-    { id: "oh_my_dog", name: "Oh My Dog", active: true },
-    { id: "poopy_food", name: "Poopy Food", active: true },
-    { id: "petfy", name: "Petfy", active: true },
-    { id: "mundo_silvestre", name: "Mundo Silvestre", active: true },
-    { id: "veterinaria_juncal", name: "Veterinaria Juncal", active: true },
-    { id: "puppis", name: "Puppis", active: true },
-    { id: "selpy_pets", name: "Selpy Pets", active: true },
-    { id: "leocan", name: "Leocan", active: true },
-    { id: "beauty_pet_shop", name: "Beauty Pet Shop", active: true },
+    {
+      id: "farmapet_city",
+      name: "Farmapet City",
+      active: true,
+      capacity: { flexEnabled: true, flexPerDay: 140, shortPerWindow: 20, shortEnabled: { "10-14": true, "14-18": true, "18-22": true } },
+    },
+    {
+      id: "oh_my_dog",
+      name: "Oh My Dog",
+      active: true,
+      capacity: { flexEnabled: false, flexPerDay: 0, shortPerWindow: 18, shortEnabled: { "10-14": true, "14-18": true, "18-22": true } },
+    },
+    {
+      id: "poopy_food",
+      name: "Poopy Food",
+      active: true,
+      capacity: { flexEnabled: true, flexPerDay: 90, shortPerWindow: 16, shortEnabled: { "10-14": true, "14-18": false, "18-22": true } },
+    },
+    {
+      id: "petfy",
+      name: "Petfy",
+      active: true,
+      capacity: { flexEnabled: true, flexPerDay: 120, shortPerWindow: 22, shortEnabled: { "10-14": true, "14-18": true, "18-22": true } },
+    },
+    {
+      id: "mundo_silvestre",
+      name: "Mundo Silvestre",
+      active: true,
+      capacity: { flexEnabled: false, flexPerDay: 0, shortPerWindow: 14, shortEnabled: { "10-14": true, "14-18": true, "18-22": false } },
+    },
+    {
+      id: "veterinaria_juncal",
+      name: "Veterinaria Juncal",
+      active: true,
+      capacity: { flexEnabled: true, flexPerDay: 70, shortPerWindow: 12, shortEnabled: { "10-14": true, "14-18": true, "18-22": true } },
+    },
+    {
+      id: "puppis",
+      name: "Puppis",
+      active: true,
+      capacity: { flexEnabled: true, flexPerDay: 160, shortPerWindow: 26, shortEnabled: { "10-14": true, "14-18": true, "18-22": true } },
+    },
+    {
+      id: "selpy_pets",
+      name: "Selpy Pets",
+      active: true,
+      capacity: { flexEnabled: false, flexPerDay: 0, shortPerWindow: 20, shortEnabled: { "10-14": true, "14-18": true, "18-22": true } },
+    },
+    {
+      id: "leocan",
+      name: "Leocan",
+      active: true,
+      capacity: { flexEnabled: true, flexPerDay: 85, shortPerWindow: 16, shortEnabled: { "10-14": true, "14-18": false, "18-22": false } },
+    },
+    {
+      id: "beauty_pet_shop",
+      name: "Beauty Pet Shop",
+      active: true,
+      capacity: { flexEnabled: true, flexPerDay: 60, shortPerWindow: 14, shortEnabled: { "10-14": true, "14-18": true, "18-22": true } },
+    },
     // Cuando ningún petshop toma el pedido, se deriva a nosotros.
-    { id: "mis_pichos", name: "Mis Pichos", active: true },
+    {
+      id: "mis_pichos",
+      name: "Mis Pichos",
+      active: true,
+      capacity: { flexEnabled: true, flexPerDay: 200, shortPerWindow: 30, shortEnabled: { "10-14": true, "14-18": true, "18-22": true } },
+    },
   ];
 
   const customers = [
@@ -299,8 +354,6 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
   const reprogramarRows: ReprogramarRow[] = [];
   const sinDespacharRows: SinDespacharRow[] = [];
   const estancadosRows: EstancadoRow[] = [];
-
-  const capacityLimits = { flexPerDay: 400, franjaPerDay: 160 };
 
   // Build per-petshop metrics with plausible ranges
   for (const ps of petshops) {
@@ -363,8 +416,55 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
     const devoluciones = round0(baseTotal * (0.01 + rnd() * 0.02));
     const retiros = round0(baseTotal * (0.005 + rnd() * 0.02));
 
-    const capacityFlexHourly = buildCapacityHourly(rnd, capacityLimits.flexPerDay);
-    const capacityFranjaHourly = buildCapacityHourly(rnd, capacityLimits.franjaPerDay);
+    // Capacity (por petshop)
+    const shortLimitPerWindow = ps.capacity.shortPerWindow;
+    const enabledShortWins = (["10-14", "14-18", "18-22"] as const).filter((w) => ps.capacity.shortEnabled[w]);
+    const shortLimitTotal = shortLimitPerWindow * enabledShortWins.length;
+
+    const flexLimit = ps.capacity.flexEnabled ? ps.capacity.flexPerDay : 0;
+
+    // In real ops they rarely exceed capacity, so keep utilization under ~90% most days.
+    const utilShort = 0.55 + rnd() * 0.38; // 55%..93%
+    const utilFlex = 0.5 + rnd() * 0.38; // 50%..88%
+
+    const usedShortTotal = Math.min(shortLimitTotal, round0(shortLimitTotal * utilShort));
+    const usedFlexTotal = ps.capacity.flexEnabled ? Math.min(flexLimit, round0(flexLimit * utilFlex)) : 0;
+
+    // Distribute franja corta only among enabled windows.
+    const shortWeights = enabledShortWins.map(() => 0.8 + rnd() * 0.6);
+    const shortUsedByWin = distributeByWeights(usedShortTotal, shortWeights, rnd);
+    const used1014 = enabledShortWins.includes("10-14") ? shortUsedByWin[enabledShortWins.indexOf("10-14")] ?? 0 : 0;
+    const used1418 = enabledShortWins.includes("14-18") ? shortUsedByWin[enabledShortWins.indexOf("14-18")] ?? 0 : 0;
+    const used1822 = enabledShortWins.includes("18-22") ? shortUsedByWin[enabledShortWins.indexOf("18-22")] ?? 0 : 0;
+
+    const hours1014 = [10, 11, 12, 13];
+    const hours1418 = [14, 15, 16, 17];
+    const hours1822 = [18, 19, 20, 21];
+    const flexHours = [14, 15, 16, 17, 18, 19, 20, 21];
+
+    const capacityFranjaHourly = [
+      ...(ps.capacity.shortEnabled["10-14"] ? buildHourlyForHours(rnd, hours1014, used1014) : []),
+      ...(ps.capacity.shortEnabled["14-18"] ? buildHourlyForHours(rnd, hours1418, used1418) : []),
+      ...(ps.capacity.shortEnabled["18-22"] ? buildHourlyForHours(rnd, hours1822, used1822) : []),
+    ]
+      .slice()
+      .sort((a, b) => a.hour - b.hour);
+
+    const capacityFlexHourly = ps.capacity.flexEnabled ? buildHourlyForHours(rnd, flexHours, usedFlexTotal) : [];
+
+    // Daily history (lets UI compare closeness to capacity each day)
+    const capacityFranjaDaily: CapacityDayBucket[] = days.map((d0) => {
+      // Keep it stable-ish across days with light drift
+      const drift = 0.82 + rnd() * 0.22; // 82%..104%
+      const used = Math.min(shortLimitTotal, round0(usedShortTotal * drift));
+      return { t: iso(startOfDay(d0)), used };
+    });
+    const capacityFlexDaily: CapacityDayBucket[] = days.map((d0) => {
+      if (!ps.capacity.flexEnabled) return { t: iso(startOfDay(d0)), used: 0 };
+      const drift = 0.82 + rnd() * 0.22;
+      const used = Math.min(flexLimit, round0(usedFlexTotal * drift));
+      return { t: iso(startOfDay(d0)), used };
+    });
 
     metricsByPetshop.push({
       petshopId: ps.id,
@@ -399,6 +499,8 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
       retiros,
       capacityFlexHourly,
       capacityFranjaHourly,
+      capacityFlexDaily,
+      capacityFranjaDaily,
     });
 
     // rows (bounded so UI isn't huge)
@@ -500,7 +602,6 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
     sinDespacharRows,
     estancadosRows,
     top3Petshops,
-    capacityLimits,
   };
 }
 

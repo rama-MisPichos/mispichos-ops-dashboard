@@ -73,6 +73,7 @@ function Doughnut({
   bLabel,
   bValue,
   bColor,
+  legendLayout = "stack",
 }: {
   aLabel: string;
   aValue: number;
@@ -80,6 +81,7 @@ function Doughnut({
   bLabel: string;
   bValue: number;
   bColor: string;
+  legendLayout?: "stack" | "twoCol";
 }) {
   const total = Math.max(1, aValue + bValue);
   const aPct = aValue / total;
@@ -115,7 +117,7 @@ function Doughnut({
           strokeLinecap="butt"
         />
       </svg>
-      <div className="donutLegend">
+      <div className={`donutLegend ${legendLayout === "twoCol" ? "donutLegendTwoCol" : ""}`}>
         <div className="donutLegendItem">
           <span className="legendSwatch" style={{ background: aColor }} />
           <div>
@@ -297,18 +299,21 @@ function StackedBars({
 function LineMini({
   points,
   limit,
+  color = "var(--info)",
 }: {
   points: { x: number; y: number }[];
   limit: number;
+  color?: string;
 }) {
   const w = 860;
   const h = 140;
   const pad = 10;
   const maxY = Math.max(limit, ...points.map((p0) => p0.y), 1);
+  const maxX = Math.max(1, ...points.map((p0) => p0.x), 1);
 
   const d = points
     .map((p0, i) => {
-      const x = pad + (p0.x * (w - pad * 2)) / 23;
+      const x = pad + (p0.x * (w - pad * 2)) / maxX;
       const y = pad + (1 - p0.y / maxY) * (h - pad * 2);
       return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
     })
@@ -316,17 +321,17 @@ function LineMini({
 
   const yLimit = pad + (1 - limit / maxY) * (h - pad * 2);
   const last = points[points.length - 1];
-  const xLast = last ? pad + (last.x * (w - pad * 2)) / 23 : w - pad;
+  const xLast = last ? pad + (last.x * (w - pad * 2)) / maxX : w - pad;
   const yLast = last ? pad + (1 - last.y / maxY) * (h - pad * 2) : h - pad;
 
   return (
     <svg className="lineMini" viewBox={`0 0 ${w} ${h}`} role="img" aria-label="Capacity line">
       <path d={`M${pad},${h - pad} L${w - pad},${h - pad}`} stroke="var(--border)" strokeWidth="1" fill="none" />
       <path d={`M${pad},${yLimit.toFixed(1)} L${w - pad},${yLimit.toFixed(1)}`} stroke="var(--bad)" strokeWidth="1.5" strokeDasharray="5 4" fill="none" />
-      <path d={d} stroke="var(--info)" strokeWidth="2.5" fill="none" />
+      <path d={d} stroke={color} strokeWidth="2.5" fill="none" />
       {last ? (
         <>
-          <circle cx={xLast} cy={yLast} r="3.5" fill="var(--info)" />
+          <circle cx={xLast} cy={yLast} r="3.5" fill={color} />
           <text x={xLast - 6} y={yLast - 8} textAnchor="end" fontSize="11" fill="var(--muted)" className="mono">
             {round0(last.y)}
           </text>
@@ -449,6 +454,53 @@ function deltaColor(deltaPct: number) {
   return "var(--muted)";
 }
 
+function deltaColorForMetric(deltaPct: number, mode: "higher_better" | "lower_better") {
+  const r = round0(deltaPct);
+  if (r === 0) return "var(--muted)";
+  if (mode === "higher_better") return r > 0 ? "var(--ok)" : "var(--bad)";
+  return r < 0 ? "var(--ok)" : "var(--bad)";
+}
+
+function DeltaPill({ deltaPct, mode = "higher_better" }: { deltaPct: number; mode?: "higher_better" | "lower_better" }) {
+  const r = round0(deltaPct);
+  const dir = r > 0 ? "up" : r < 0 ? "down" : "flat";
+  const arrow = r > 0 ? "↗" : r < 0 ? "↘" : "→";
+  return (
+    <span className={`deltaPill deltaPill-${dir}`} style={{ color: deltaColorForMetric(deltaPct, mode) }}>
+      <span className="deltaArrow" aria-hidden="true">
+        {arrow}
+      </span>
+      <span>{kpiDeltaText(deltaPct)}</span>
+    </span>
+  );
+}
+
+function previousFromDelta(current: number, deltaPct: number) {
+  const d = deltaPct / 100;
+  if (!Number.isFinite(current) || !Number.isFinite(d)) return null;
+  const denom = 1 + d;
+  if (Math.abs(denom) < 1e-6) return null;
+  return current / denom;
+}
+
+function stableDeltaPctFor(key: string) {
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) | 0;
+  const r01 = (Math.abs(hash) % 1000) / 1000; // 0..0.999
+  return (r01 - 0.45) * 18; // ~ -8.1% .. +9.9%
+}
+
+function WindowPill({ win }: { win?: "10-14" | "14-18" | "18-22" | "14-22" | null }) {
+  if (!win) return <span className="sub">—</span>;
+  const colorVar =
+    win === "10-14" ? "var(--cap1014)" : win === "14-18" ? "var(--cap1418)" : win === "18-22" ? "var(--cap1822)" : "var(--capFlex)";
+  return (
+    <span className="windowPill mono" style={{ ["--wColor" as never]: colorVar }}>
+      {win}
+    </span>
+  );
+}
+
 type KpiTone = "ok" | "warn" | "bad" | "neutral";
 
 function toneColor(t: KpiTone) {
@@ -469,6 +521,48 @@ function usageColor(p: number) {
   if (p > 0.9) return "var(--bad)";
   if (p >= 0.7) return "var(--warn)";
   return "var(--ok)";
+}
+
+function sumHours(hourly: { hour: number; used: number }[], fromHour: number, toHourExclusive: number) {
+  let acc = 0;
+  for (const b of hourly) {
+    if (b.hour >= fromHour && b.hour < toHourExclusive) acc += b.used;
+  }
+  return acc;
+}
+
+function fillHours24(hourly: { hour: number; used: number }[]) {
+  const map = new Map<number, number>();
+  for (const b of hourly) map.set(b.hour, (map.get(b.hour) ?? 0) + (b.used ?? 0));
+  const out: { hour: number; used: number }[] = [];
+  for (let h = 0; h < 24; h++) out.push({ hour: h, used: map.get(h) ?? 0 });
+  return out;
+}
+
+function sumDailyUsed(metrics: { capacityFlexDaily?: { t: string; used: number }[]; capacityFranjaDaily?: { t: string; used: number }[] }[], key: "flex" | "franja") {
+  const map = new Map<string, number>();
+  for (const m0 of metrics) {
+    const arr = key === "flex" ? (m0.capacityFlexDaily ?? []) : (m0.capacityFranjaDaily ?? []);
+    for (const b of arr) map.set(b.t, (map.get(b.t) ?? 0) + (b.used ?? 0));
+  }
+  return Array.from(map.entries())
+    .map(([t, used]) => ({ t, used }))
+    .sort((a, b) => new Date(a.t).getTime() - new Date(b.t).getTime());
+}
+
+function nearCapacityClass(used: number, limit: number) {
+  if (limit <= 0) return "";
+  const p = used / limit;
+  if (p >= 0.95) return "capNear capNearMax";
+  if (p >= 0.9) return "capNear capNearWarn";
+  return "";
+}
+
+function nearCapacityPctClass(pct0: number) {
+  const p = pct0 / 100;
+  if (p >= 0.95) return "capNearMax";
+  if (p >= 0.9) return "capNearWarn";
+  return "";
 }
 
 export default function DashboardClient() {
@@ -728,18 +822,115 @@ export default function DashboardClient() {
 
   const capacity = useMemo(() => {
     if (!data || !metricsSelected) return null;
-    const limits = data.capacityLimits;
-    const m =
-      petshopId === "ALL"
-        ? data.metricsByPetshop[0]
-        : data.metricsByPetshop.find((x) => x.petshopId === petshopId) ?? data.metricsByPetshop[0];
-    const flexUsed = m.capacityFlexHourly.reduce((acc, x) => acc + x.used, 0);
-    const franjaUsed = m.capacityFranjaHourly.reduce((acc, x) => acc + x.used, 0);
+
+    const active = data.petshops.filter((p0) => p0.active);
+    const selectedPetshops = petshopId === "ALL" ? active : active.filter((p0) => p0.id === petshopId);
+    const selectedIds = new Set(selectedPetshops.map((p0) => p0.id));
+    const selectedMetrics = data.metricsByPetshop.filter((m0) => selectedIds.has(m0.petshopId));
+
+    const sumHourly = (get: (m0: (typeof selectedMetrics)[number]) => { hour: number; used: number }[]) => {
+      const map = new Map<number, number>();
+      for (const m0 of selectedMetrics) {
+        for (const b of get(m0) ?? []) map.set(b.hour, (map.get(b.hour) ?? 0) + (b.used ?? 0));
+      }
+      return Array.from(map.entries())
+        .map(([hour, used]) => ({ hour, used }))
+        .sort((a, b) => a.hour - b.hour);
+    };
+
+    const flexUsed = selectedMetrics.reduce((acc, m0) => acc + m0.capacityFlexHourly.reduce((a, b) => a + (b.used ?? 0), 0), 0);
+    const franjaUsed = selectedMetrics.reduce((acc, m0) => acc + m0.capacityFranjaHourly.reduce((a, b) => a + (b.used ?? 0), 0), 0);
+
+    const flexLimit = selectedPetshops.reduce((acc, p0) => acc + (p0.capacity.flexEnabled ? p0.capacity.flexPerDay : 0), 0);
+    const franjaLimit = selectedPetshops.reduce((acc, p0) => {
+      const nEnabled = (["10-14", "14-18", "18-22"] as const).filter((w) => p0.capacity.shortEnabled[w]).length;
+      return acc + p0.capacity.shortPerWindow * nEnabled;
+    }, 0);
+
     return {
-      flex: { used: flexUsed, limit: limits.flexPerDay, hourly: m.capacityFlexHourly },
-      franja: { used: franjaUsed, limit: limits.franjaPerDay, hourly: m.capacityFranjaHourly },
+      flex: {
+        used: flexUsed,
+        limit: flexLimit,
+        hourly: sumHourly((m0) => m0.capacityFlexHourly),
+        daily: sumDailyUsed(selectedMetrics, "flex"),
+      },
+      franja: {
+        used: franjaUsed,
+        limit: franjaLimit,
+        hourly: sumHourly((m0) => m0.capacityFranjaHourly),
+        daily: sumDailyUsed(selectedMetrics, "franja"),
+      },
     };
   }, [data, metricsSelected, petshopId]);
+
+  const capacityByPetshop = useMemo(() => {
+    if (!data) return [];
+    const psById = new Map(data.petshops.filter((p0) => p0.active).map((p0) => [p0.id, p0] as const));
+    return data.metricsByPetshop
+      .filter((m0) => psById.has(m0.petshopId))
+      .map((m0) => {
+        const ps = psById.get(m0.petshopId)!;
+        const used1014 = sumHours(m0.capacityFranjaHourly, 10, 14);
+        const used1418 = sumHours(m0.capacityFranjaHourly, 14, 18);
+        const used1822 = sumHours(m0.capacityFranjaHourly, 18, 22);
+        const flex1422 = sumHours(m0.capacityFlexHourly, 14, 22);
+        return {
+          id: m0.petshopId,
+          label: m0.petshopName,
+          used1014,
+          used1418,
+          used1822,
+          flex1422,
+          limits: ps.capacity,
+        };
+      })
+      .sort((a, b) => (b.used1014 + b.used1418 + b.used1822) - (a.used1014 + a.used1418 + a.used1822));
+  }, [data]);
+
+  const shortCapacityRows = useMemo(() => {
+    return capacityByPetshop.map((p0) => {
+      const limitPerWindow = p0.limits.shortPerWindow;
+      return {
+        id: p0.id,
+        label: p0.label,
+        limitPerWindow,
+        shortEnabled: p0.limits.shortEnabled,
+        used1014: p0.used1014,
+        used1418: p0.used1418,
+        used1822: p0.used1822,
+      };
+    });
+  }, [capacityByPetshop]);
+
+  const shortCapacityPctRows = useMemo(() => {
+    return shortCapacityRows.map((r) => ({
+      id: r.id,
+      label: r.label,
+      shortEnabled: r.shortEnabled,
+      p1014: r.shortEnabled["10-14"] ? round0(pct(r.used1014, Math.max(1, r.limitPerWindow))) : 0,
+      p1418: r.shortEnabled["14-18"] ? round0(pct(r.used1418, Math.max(1, r.limitPerWindow))) : 0,
+      p1822: r.shortEnabled["18-22"] ? round0(pct(r.used1822, Math.max(1, r.limitPerWindow))) : 0,
+    }));
+  }, [shortCapacityRows]);
+
+  const flexCapacityRows = useMemo(() => {
+    return capacityByPetshop
+      .map((p0) => {
+        const limit = p0.limits.flexEnabled ? p0.limits.flexPerDay : 0;
+        const used = p0.flex1422 ?? 0;
+        return { id: p0.id, label: p0.label, flexEnabled: p0.limits.flexEnabled, used, limit };
+      })
+      .sort((a, b) => b.used - a.used);
+  }, [capacityByPetshop]);
+
+  const flexCapacityPctRows = useMemo(() => {
+    return flexCapacityRows.map((r) => ({
+      id: r.id,
+      label: r.label,
+      flexEnabled: r.flexEnabled,
+      pct0: r.flexEnabled && r.limit > 0 ? round0(pct(r.used, r.limit)) : 0,
+    }));
+  }, [flexCapacityRows]);
 
   const globalSplitBadge = useMemo(() => {
     const list = data?.metricsByPetshop ?? [];
@@ -761,6 +952,8 @@ export default function DashboardClient() {
   const favoritesStorageKey = "opsQuickAccess:favorites:v1";
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [quickAccessOpen, setQuickAccessOpen] = useState(false);
+  const [shortCapacityOpen, setShortCapacityOpen] = useState(false);
+  const [flexCapacityOpen, setFlexCapacityOpen] = useState(false);
   const [topbarHidden, setTopbarHidden] = useState(false);
   const lastScrollYRef = useRef(0);
   const rafRef = useRef<number | null>(null);
@@ -1076,14 +1269,18 @@ export default function DashboardClient() {
         <div className="kpiRow">
           <div className="kpiMain">
             <div className="kpiLabel">Total pedidos</div>
-            <div className="kpiValue">{metricsSelected ? metricsSelected.total.toLocaleString("es-AR") : "—"}</div>
+            <div className="kpiValueRow">
+              <div className="kpiValue">{metricsSelected ? metricsSelected.total.toLocaleString("es-AR") : "—"}</div>
+              <div className="kpiDeltaRight">
+                {metricsSelected && totalDeltaPct != null ? <DeltaPill deltaPct={totalDeltaPct} mode="higher_better" /> : <span className="sub">—</span>}
+              </div>
+            </div>
             <div className="kpiSub">
-              {metricsSelected ? (
-                totalDeltaPct != null ? (
-                  <span style={{ color: deltaColor(totalDeltaPct) }}>{kpiDeltaText(totalDeltaPct)}</span>
-                ) : (
-                  "—"
-                )
+              {metricsSelected && totalDeltaPct != null ? (
+                (() => {
+                  const prev = previousFromDelta(metricsSelected.total ?? 0, totalDeltaPct);
+                  return prev != null ? <span className="mono">Anterior: {round0(prev).toLocaleString("es-AR")}</span> : <span>—</span>;
+                })()
               ) : (
                 "—"
               )}
@@ -1098,58 +1295,158 @@ export default function DashboardClient() {
           <div className="kpiSmallGrid">
             <div className="kpiSmall">
               <div className="kpiLabel">Sin despachar</div>
-              <div
-                className="kpiValue"
-                style={{
-                  color: metricsSelected ? toneColor(toneByRate(metricsSelected.sindesp / Math.max(1, metricsSelected.total), 0.03, 0.06)) : undefined,
-                }}
-              >
-                {metricsSelected ? metricsSelected.sindesp : "—"}
-              </div>
+              {metricsSelected ? (
+                (() => {
+                  const d = stableDeltaPctFor(`${petshopId}|${from}|${to}|sindesp`);
+                  const prev = previousFromDelta(metricsSelected.sindesp ?? 0, d);
+                  const tone = toneByRate(metricsSelected.sindesp / Math.max(1, metricsSelected.total), 0.03, 0.06);
+                  return (
+                    <>
+                      <div className="kpiValueRow">
+                        <div className="kpiValue" style={{ color: toneColor(tone) }}>
+                          {metricsSelected.sindesp}
+                        </div>
+                        <div className="kpiDeltaRight">{prev != null ? <DeltaPill deltaPct={d} mode="lower_better" /> : <span className="sub">—</span>}</div>
+                      </div>
+                      <div className="kpiSub">{prev != null ? <span className="mono">Anterior: {round0(prev).toLocaleString("es-AR")}</span> : "—"}</div>
+                    </>
+                  );
+                })()
+              ) : (
+                <>
+                  <div className="kpiValueRow">
+                    <div className="kpiValue">—</div>
+                    <div className="kpiDeltaRight">
+                      <span className="sub">—</span>
+                    </div>
+                  </div>
+                  <div className="kpiSub">—</div>
+                </>
+              )}
             </div>
             <div className="kpiSmall">
               <div className="kpiLabel">Demorados 1ra vuelta</div>
-              <div
-                className="kpiValue"
-                style={{
-                  color: metricsSelected ? toneColor(toneByRate(metricsSelected.d1pct / 100, 0.03, 0.06)) : undefined,
-                }}
-              >
-                {metricsSelected ? `${metricsSelected.d1} (${formatPct0(metricsSelected.d1pct)})` : "—"}
-              </div>
+              {metricsSelected ? (
+                (() => {
+                  const d = stableDeltaPctFor(`${petshopId}|${from}|${to}|d1`);
+                  const prev = previousFromDelta(metricsSelected.d1 ?? 0, d);
+                  const tone = toneByRate(metricsSelected.d1pct / 100, 0.03, 0.06);
+                  return (
+                    <>
+                      <div className="kpiValueRow">
+                        <div className="kpiValue" style={{ color: toneColor(tone) }}>
+                          {metricsSelected.d1}
+                        </div>
+                        <div className="kpiDeltaRight">{prev != null ? <DeltaPill deltaPct={d} mode="lower_better" /> : <span className="sub">—</span>}</div>
+                      </div>
+                      <div className="kpiSub">{prev != null ? <span className="mono">Anterior: {round0(prev).toLocaleString("es-AR")}</span> : "—"}</div>
+                    </>
+                  );
+                })()
+              ) : (
+                <>
+                  <div className="kpiValueRow">
+                    <div className="kpiValue">—</div>
+                    <div className="kpiDeltaRight">
+                      <span className="sub">—</span>
+                    </div>
+                  </div>
+                  <div className="kpiSub">—</div>
+                </>
+              )}
             </div>
             <div className="kpiSmall">
               <div className="kpiLabel">Demorados 2da vuelta</div>
-              <div
-                className="kpiValue"
-                style={{
-                  color: metricsSelected ? toneColor(toneByRate(metricsSelected.d2pct / 100, 0.015, 0.03)) : undefined,
-                }}
-              >
-                {metricsSelected ? `${metricsSelected.d2} (${formatPct0(metricsSelected.d2pct)})` : "—"}
-              </div>
+              {metricsSelected ? (
+                (() => {
+                  const d = stableDeltaPctFor(`${petshopId}|${from}|${to}|d2`);
+                  const prev = previousFromDelta(metricsSelected.d2 ?? 0, d);
+                  const tone = toneByRate(metricsSelected.d2pct / 100, 0.015, 0.03);
+                  return (
+                    <>
+                      <div className="kpiValueRow">
+                        <div className="kpiValue" style={{ color: toneColor(tone) }}>
+                          {metricsSelected.d2}
+                        </div>
+                        <div className="kpiDeltaRight">{prev != null ? <DeltaPill deltaPct={d} mode="lower_better" /> : <span className="sub">—</span>}</div>
+                      </div>
+                      <div className="kpiSub">{prev != null ? <span className="mono">Anterior: {round0(prev).toLocaleString("es-AR")}</span> : "—"}</div>
+                    </>
+                  );
+                })()
+              ) : (
+                <>
+                  <div className="kpiValueRow">
+                    <div className="kpiValue">—</div>
+                    <div className="kpiDeltaRight">
+                      <span className="sub">—</span>
+                    </div>
+                  </div>
+                  <div className="kpiSub">—</div>
+                </>
+              )}
             </div>
-            <div className="kpiSmall">
+            <div className="kpiSmall kpiSmallWide">
               <div className="kpiLabel">Reprogramar</div>
-              <div
-                className="kpiValue"
-                style={{
-                  color: metricsSelected ? toneColor(toneByRate(metricsSelected.reprog / Math.max(1, metricsSelected.total), 0.02, 0.04)) : undefined,
-                }}
-              >
-                {metricsSelected ? metricsSelected.reprog : "—"}
-              </div>
+              {metricsSelected ? (
+                (() => {
+                  const d = stableDeltaPctFor(`${petshopId}|${from}|${to}|reprog`);
+                  const prev = previousFromDelta(metricsSelected.reprog ?? 0, d);
+                  const tone = toneByRate(metricsSelected.reprog / Math.max(1, metricsSelected.total), 0.02, 0.04);
+                  return (
+                    <>
+                      <div className="kpiValueRow">
+                        <div className="kpiValue" style={{ color: toneColor(tone) }}>
+                          {metricsSelected.reprog}
+                        </div>
+                        <div className="kpiDeltaRight">{prev != null ? <DeltaPill deltaPct={d} mode="lower_better" /> : <span className="sub">—</span>}</div>
+                      </div>
+                      <div className="kpiSub">{prev != null ? <span className="mono">Anterior: {round0(prev).toLocaleString("es-AR")}</span> : "—"}</div>
+                    </>
+                  );
+                })()
+              ) : (
+                <>
+                  <div className="kpiValueRow">
+                    <div className="kpiValue">—</div>
+                    <div className="kpiDeltaRight">
+                      <span className="sub">—</span>
+                    </div>
+                  </div>
+                  <div className="kpiSub">—</div>
+                </>
+              )}
             </div>
-            <div className="kpiSmall">
+            <div className="kpiSmall kpiSmallWide">
               <div className="kpiLabel">Cancelados</div>
-              <div
-                className="kpiValue"
-                style={{
-                  color: metricsSelected ? toneColor(toneByRate(metricsSelected.cancelPct / 100, 0.02, 0.04)) : undefined,
-                }}
-              >
-                {metricsSelected ? `${metricsSelected.cancel} (${formatPct0(metricsSelected.cancelPct)})` : "—"}
-              </div>
+              {metricsSelected ? (
+                (() => {
+                  const d = stableDeltaPctFor(`${petshopId}|${from}|${to}|cancel`);
+                  const prev = previousFromDelta(metricsSelected.cancel ?? 0, d);
+                  const tone = toneByRate(metricsSelected.cancelPct / 100, 0.02, 0.04);
+                  return (
+                    <>
+                      <div className="kpiValueRow">
+                        <div className="kpiValue" style={{ color: toneColor(tone) }}>
+                          {metricsSelected.cancel}
+                        </div>
+                        <div className="kpiDeltaRight">{prev != null ? <DeltaPill deltaPct={d} mode="lower_better" /> : <span className="sub">—</span>}</div>
+                      </div>
+                      <div className="kpiSub">{prev != null ? <span className="mono">Anterior: {round0(prev).toLocaleString("es-AR")}</span> : "—"}</div>
+                    </>
+                  );
+                })()
+              ) : (
+                <>
+                  <div className="kpiValueRow">
+                    <div className="kpiValue">—</div>
+                    <div className="kpiDeltaRight">
+                      <span className="sub">—</span>
+                    </div>
+                  </div>
+                  <div className="kpiSub">—</div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -1166,6 +1463,7 @@ export default function DashboardClient() {
               bLabel="Recurrentes"
               bValue={metricsSelected?.recurrentClients ?? 0}
               bColor="var(--muted)"
+              legendLayout="twoCol"
             />
           </div>
           <div className="miniCard">
@@ -1401,7 +1699,9 @@ export default function DashboardClient() {
                 <tr key={`${r.orderId}-${r.createdAt}`} data-ps={r.petshopId ?? ""}>
                   <td className="mono">{r.orderId}</td>
                   <td>{new Date(r.createdAt).toLocaleString("es-AR")}</td>
-                  <td className="mono">{r.deliveryWindow ?? "—"}</td>
+                  <td className="franjaCell">
+                    <WindowPill win={r.deliveryWindow ?? null} />
+                  </td>
                   <td className="truncate">{r.customer}</td>
                   <td className="truncate">{r.address}</td>
                   <td className="truncate">{r.product}</td>
@@ -1512,7 +1812,9 @@ export default function DashboardClient() {
                   <tr key={`${r.orderId}-${r.labelPrintedAt}`}>
                     <td className="mono">{r.orderId}</td>
                     <td>{new Date(r.labelPrintedAt).toLocaleString("es-AR")}</td>
-                    <td className="mono">{r.deliveryWindow ?? "—"}</td>
+                    <td className="franjaCell">
+                      <WindowPill win={r.deliveryWindow ?? null} />
+                    </td>
                     <td className="truncate">{r.customer}</td>
                     <td className="truncate">{r.address}</td>
                     <td className="truncate">{r.product}</td>
@@ -1755,17 +2057,26 @@ export default function DashboardClient() {
                     }}
                   />
                 </div>
-                <LineMini points={capacity.flex.hourly.map((x) => ({ x: x.hour, y: x.used }))} limit={round0(capacity.flex.limit / 24)} />
+                <LineMini
+                  points={(capacity.flex.daily?.length ? capacity.flex.daily : []).map((x, i) => ({ x: i, y: x.used }))}
+                  limit={round0(capacity.flex.limit)}
+                  color="var(--capFlex)"
+                />
                 <div className="utilMeta">
                   <span className="utilChip utilChipLimit">
                     <span className="utilChipSwatch utilChipSwatchLimit" aria-hidden="true" />
-                    <span className="utilChipLabel">Límite/h</span>
-                    <span className="utilChipValue">{round0(capacity.flex.limit / 24)}</span>
+                    <span className="utilChipLabel">Capacidad</span>
+                    <span className="utilChipValue">{round0(capacity.flex.limit)}</span>
                   </span>
                   <span className="utilChip utilChipUsed">
                     <span className="utilChipSwatch utilChipSwatchUsed" aria-hidden="true" />
-                    <span className="utilChipLabel">Usado/h</span>
-                    <span className="utilChipValue">{round0(capacity.flex.used / 24)}</span>
+                    <span className="utilChipLabel">Usado</span>
+                    <span className="utilChipValue">{round0(capacity.flex.used)}</span>
+                  </span>
+                  <span className="utilChip utilChipRemain">
+                    <span className="utilChipSwatch utilChipSwatchRemain" aria-hidden="true" />
+                    <span className="utilChipLabel">Restante</span>
+                    <span className="utilChipValue">{Math.max(0, round0(capacity.flex.limit - capacity.flex.used))}</span>
                   </span>
                 </div>
               </>
@@ -1798,25 +2109,197 @@ export default function DashboardClient() {
                   />
                 </div>
                 <LineMini
-                  points={capacity.franja.hourly.map((x) => ({ x: x.hour, y: x.used }))}
-                  limit={round0(capacity.franja.limit / 24)}
+                  points={(capacity.franja.daily?.length ? capacity.franja.daily : []).map((x, i) => ({ x: i, y: x.used }))}
+                  limit={round0(capacity.franja.limit)}
+                  color="var(--cap1418)"
                 />
                 <div className="utilMeta">
                   <span className="utilChip utilChipLimit">
                     <span className="utilChipSwatch utilChipSwatchLimit" aria-hidden="true" />
-                    <span className="utilChipLabel">Límite/h</span>
-                    <span className="utilChipValue">{round0(capacity.franja.limit / 24)}</span>
+                    <span className="utilChipLabel">Capacidad</span>
+                    <span className="utilChipValue">{round0(capacity.franja.limit)}</span>
                   </span>
                   <span className="utilChip utilChipUsed">
                     <span className="utilChipSwatch utilChipSwatchUsed" aria-hidden="true" />
-                    <span className="utilChipLabel">Usado/h</span>
-                    <span className="utilChipValue">{round0(capacity.franja.used / 24)}</span>
+                    <span className="utilChipLabel">Usado</span>
+                    <span className="utilChipValue">{round0(capacity.franja.used)}</span>
+                  </span>
+                  <span className="utilChip utilChipRemain">
+                    <span className="utilChipSwatch utilChipSwatchRemain" aria-hidden="true" />
+                    <span className="utilChipLabel">Restante</span>
+                    <span className="utilChipValue">{Math.max(0, round0(capacity.franja.limit - capacity.franja.used))}</span>
                   </span>
                 </div>
               </>
             ) : null}
           </div>
         </div>
+
+        <div className="twoCol">
+          <div className="miniCard">
+            <div className="miniHeader">
+              <div className="miniTitle">Flex (14–22) por petshop</div>
+              <div className="sub">% de uso por petshop (usado / capacidad)</div>
+            </div>
+            {flexCapacityPctRows.length ? (
+              <>
+                <button type="button" className="chartButton" onClick={() => setFlexCapacityOpen(true)} aria-label="Ver usado vs capacidad Flex por petshop">
+                  <div className="flexUtilHeader">
+                    <span className="shortUtilHLabel">Petshop</span>
+                    <span className="shortUtilHWin" style={{ color: "var(--capFlex)" }}>
+                      14–22
+                    </span>
+                  </div>
+                  <div className="flexUtilList">
+                    {flexCapacityPctRows.map((r) => (
+                      <div key={r.id} className="flexUtilRow">
+                        <div className="shortUtilLabel truncate" title={r.label}>
+                          {r.label}
+                        </div>
+                        <div className="shortUtilCell">
+                          {r.flexEnabled ? (
+                            <div className={`shortUtilBar ${nearCapacityPctClass(r.pct0)}`} style={{ ["--c" as never]: "var(--capFlex)", ["--p" as never]: `${clamp(r.pct0, 0, 100)}%` }}>
+                              {r.pct0}%
+                            </div>
+                          ) : (
+                            <div className="shortUtilBar" style={{ ["--c" as never]: "var(--ok)", ["--p" as never]: `0%` }}>
+                              OFF
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </button>
+              </>
+            ) : (
+              <div className="sub">—</div>
+            )}
+          </div>
+
+          <div className="miniCard">
+            <div className="miniHeader">
+              <div className="miniTitle">Franja corta por petshop</div>
+              <div className="sub">% de uso por franja (usado / capacidad por ventana)</div>
+            </div>
+            {shortCapacityPctRows.length ? (
+              <>
+                <button type="button" className="chartButton" onClick={() => setShortCapacityOpen(true)} aria-label="Ver usado vs capacidad franja corta por petshop">
+                  <div className="shortUtilHeader">
+                    <span className="shortUtilHLabel">Petshop</span>
+                    <span className="shortUtilHWin" style={{ color: "var(--cap1014)" }}>
+                      10–14
+                    </span>
+                    <span className="shortUtilHWin" style={{ color: "var(--cap1418)" }}>
+                      14–18
+                    </span>
+                    <span className="shortUtilHWin" style={{ color: "var(--cap1822)" }}>
+                      18–22
+                    </span>
+                  </div>
+                  <div className="shortUtilList">
+                    {shortCapacityPctRows.map((r) => (
+                      <div key={r.id} className="shortUtilRow">
+                        <div className="shortUtilLabel truncate" title={r.label}>
+                          {r.label}
+                        </div>
+                        <div className="shortUtilCell">
+                          <div className={`shortUtilBar ${nearCapacityPctClass(r.p1014)}`} style={{ ["--c" as never]: "var(--cap1014)", ["--p" as never]: `${clamp(r.p1014, 0, 100)}%` }}>
+                            {r.shortEnabled["10-14"] ? `${r.p1014}%` : "OFF"}
+                          </div>
+                        </div>
+                        <div className="shortUtilCell">
+                          <div className={`shortUtilBar ${nearCapacityPctClass(r.p1418)}`} style={{ ["--c" as never]: "var(--cap1418)", ["--p" as never]: `${clamp(r.p1418, 0, 100)}%` }}>
+                            {r.shortEnabled["14-18"] ? `${r.p1418}%` : "OFF"}
+                          </div>
+                        </div>
+                        <div className="shortUtilCell">
+                          <div className={`shortUtilBar ${nearCapacityPctClass(r.p1822)}`} style={{ ["--c" as never]: "var(--cap1822)", ["--p" as never]: `${clamp(r.p1822, 0, 100)}%` }}>
+                            {r.shortEnabled["18-22"] ? `${r.p1822}%` : "OFF"}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </button>
+              </>
+            ) : (
+              <div className="sub">—</div>
+            )}
+          </div>
+        </div>
+
+        {shortCapacityOpen ? (
+          <div className="qaModal" role="dialog" aria-modal="true" aria-label="Franja corta · usado vs capacidad">
+            <div className="qaModalPanel">
+              <div className="qaModalHeader">
+                <div className="qaModalTitle">Franja corta · usado vs capacidad</div>
+                <button type="button" className="btn btnIcon" onClick={() => setShortCapacityOpen(false)} aria-label="Cerrar">
+                  ✕
+                </button>
+              </div>
+              <div className="tableScroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Petshop</th>
+                      <th>10–14</th>
+                      <th>14–18</th>
+                      <th>18–22</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shortCapacityRows.map((r) => (
+                      <tr key={r.id}>
+                        <td>{r.label}</td>
+                        <td className={`mono ${r.shortEnabled["10-14"] ? nearCapacityClass(r.used1014, r.limitPerWindow) : ""}`}>
+                          {r.shortEnabled["10-14"] ? `${r.used1014}/${r.limitPerWindow}` : "OFF"}
+                        </td>
+                        <td className={`mono ${r.shortEnabled["14-18"] ? nearCapacityClass(r.used1418, r.limitPerWindow) : ""}`}>
+                          {r.shortEnabled["14-18"] ? `${r.used1418}/${r.limitPerWindow}` : "OFF"}
+                        </td>
+                        <td className={`mono ${r.shortEnabled["18-22"] ? nearCapacityClass(r.used1822, r.limitPerWindow) : ""}`}>
+                          {r.shortEnabled["18-22"] ? `${r.used1822}/${r.limitPerWindow}` : "OFF"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {flexCapacityOpen ? (
+          <div className="qaModal" role="dialog" aria-modal="true" aria-label="Flex (14–22) · usado vs capacidad">
+            <div className="qaModalPanel">
+              <div className="qaModalHeader">
+                <div className="qaModalTitle">Flex (14–22) · usado vs capacidad</div>
+                <button type="button" className="btn btnIcon" onClick={() => setFlexCapacityOpen(false)} aria-label="Cerrar">
+                  ✕
+                </button>
+              </div>
+              <div className="tableScroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Petshop</th>
+                      <th>14–22</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {flexCapacityRows.map((r) => (
+                      <tr key={r.id}>
+                        <td>{r.label}</td>
+                        <td className={`mono ${r.flexEnabled ? nearCapacityClass(r.used, r.limit) : ""}`}>{r.flexEnabled ? `${r.used}/${r.limit}` : "OFF"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </section>
         </div>
       </div>
