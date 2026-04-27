@@ -780,6 +780,55 @@ html[data-theme] *{
   gap: 10px;
 }
 
+/* Barra de acciones debajo del título (para tablas con filtros/botones) */
+.sectionToolbar{
+  display:flex;
+  justify-content:flex-end;
+  margin: -4px 0 10px;
+}
+
+.dtRange{
+  display:flex;
+  align-items:center;
+  gap: 6px;
+  flex-wrap: nowrap;
+  max-width: 100%;
+}
+
+.dtInput{
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: 9px;
+  padding: 5px 7px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text);
+  height: 28px;
+  width: 168px;
+}
+
+.dtInput:focus{
+  outline: none;
+  border-color: color-mix(in srgb, var(--info) 35%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--infoBg) 55%, transparent);
+}
+
+/* En filtros compactos el icon-button también debe achicarse */
+.dtRange .btnIcon{
+  padding: 4px 8px;
+  min-width: 28px;
+  height: 28px;
+}
+
+@media (max-width: 740px){
+  .dtRange{
+    flex-wrap: wrap;
+  }
+  .dtInput{
+    width: 150px;
+  }
+}
+
 .btn{
   background: var(--surface);
   border: 0.5px solid var(--border);
@@ -791,6 +840,18 @@ html[data-theme] *{
   cursor: pointer;
 }
 .btn:hover{ background: color-mix(in srgb, var(--surface) 80%, var(--surface2)); }
+
+/* Botones de acciones de tablas (Wpp/Mail/Excel): más “suaves” y consistentes */
+.btnPanelAction{
+  background: color-mix(in srgb, var(--surface2) 70%, var(--surface));
+  border-color: color-mix(in srgb, var(--border) 75%, transparent);
+  height: 32px;
+  padding: 6px 10px;
+  min-width: 92px;
+}
+.btnPanelAction:hover{
+  background: color-mix(in srgb, var(--surface2) 82%, var(--surface));
+}
 
 .themeToggle{
   display:inline-flex;

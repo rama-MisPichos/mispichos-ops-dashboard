@@ -388,12 +388,22 @@ function toHtmlTable(headers: string[], rows: string[][]) {
   return `<table border="1" cellspacing="0" cellpadding="6" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;font-size:12px">${thead}${tbody}</table>`;
 }
 
+function dtLocalToMs(v: string) {
+  // `datetime-local` returns a local date-time string (no timezone suffix).
+  // `new Date()` interprets it as local time, which matches the UI expectation.
+  if (!v) return null;
+  const ms = new Date(v).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
 function CopyActionButton({
   label,
   onCopy,
+  className,
 }: {
   label: string;
   onCopy: () => Promise<void> | void;
+  className?: string;
 }) {
   const [copied, setCopied] = useState(false);
   const tRef = useRef<number | null>(null);
@@ -412,7 +422,7 @@ function CopyActionButton({
   }
 
   return (
-    <button className="btn" onClick={handleCopy} type="button">
+    <button className={`btn ${className ?? ""}`} onClick={handleCopy} type="button">
       {copied ? "Copiado!" : label}
     </button>
   );
@@ -674,6 +684,10 @@ export default function DashboardClient() {
   const PAGE_SIZE = 5;
   const [reprogramarPage, setReprogramarPage] = useState(0);
   const [sinDespacharPage, setSinDespacharPage] = useState(0);
+  const [reprogramarFromDt, setReprogramarFromDt] = useState("");
+  const [reprogramarToDt, setReprogramarToDt] = useState("");
+  const [sinDespacharFromDt, setSinDespacharFromDt] = useState("");
+  const [sinDespacharToDt, setSinDespacharToDt] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -800,13 +814,55 @@ export default function DashboardClient() {
     return rows.filter((r) => r.petshopId === petshopId);
   }, [data, petshopId]);
 
-  const reprogramarPages = useMemo(() => Math.max(1, Math.ceil(reprogramarRows.length / PAGE_SIZE)), [reprogramarRows.length]);
-  const sinDespacharPages = useMemo(() => Math.max(1, Math.ceil(sinDespacharRows.length / PAGE_SIZE)), [sinDespacharRows.length]);
+  const reprogramarRowsFiltered = useMemo(() => {
+    const fromMs = dtLocalToMs(reprogramarFromDt);
+    const toMs = dtLocalToMs(reprogramarToDt);
+    return reprogramarRows
+      .filter((r) => {
+        const t = new Date(r.createdAt).getTime();
+        if (fromMs != null && t < fromMs) return false;
+        if (toMs != null && t > toMs) return false;
+        return true;
+      })
+      .slice()
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()); // más antiguos arriba
+  }, [reprogramarFromDt, reprogramarRows, reprogramarToDt]);
+
+  const sinDespacharRowsFiltered = useMemo(() => {
+    const fromMs = dtLocalToMs(sinDespacharFromDt);
+    const toMs = dtLocalToMs(sinDespacharToDt);
+    return sinDespacharRows
+      .filter((r) => {
+        const t = new Date(r.labelPrintedAt).getTime();
+        if (fromMs != null && t < fromMs) return false;
+        if (toMs != null && t > toMs) return false;
+        return true;
+      })
+      .slice()
+      .sort((a, b) => new Date(a.labelPrintedAt).getTime() - new Date(b.labelPrintedAt).getTime()); // más antiguos arriba
+  }, [sinDespacharFromDt, sinDespacharRows, sinDespacharToDt]);
+
+  const reprogramarPages = useMemo(
+    () => Math.max(1, Math.ceil(reprogramarRowsFiltered.length / PAGE_SIZE)),
+    [reprogramarRowsFiltered.length],
+  );
+  const sinDespacharPages = useMemo(
+    () => Math.max(1, Math.ceil(sinDespacharRowsFiltered.length / PAGE_SIZE)),
+    [sinDespacharRowsFiltered.length],
+  );
 
   useEffect(() => {
     setReprogramarPage(0);
     setSinDespacharPage(0);
   }, [petshopId, from, to]);
+
+  useEffect(() => {
+    setReprogramarPage(0);
+  }, [reprogramarFromDt, reprogramarToDt]);
+
+  useEffect(() => {
+    setSinDespacharPage(0);
+  }, [sinDespacharFromDt, sinDespacharToDt]);
 
   useEffect(() => {
     setReprogramarPage((p) => Math.min(p, reprogramarPages - 1));
@@ -818,13 +874,13 @@ export default function DashboardClient() {
 
   const reprogramarRowsView = useMemo(() => {
     const start = reprogramarPage * PAGE_SIZE;
-    return reprogramarRows.slice(start, start + PAGE_SIZE);
-  }, [reprogramarPage, reprogramarRows]);
+    return reprogramarRowsFiltered.slice(start, start + PAGE_SIZE);
+  }, [reprogramarPage, reprogramarRowsFiltered]);
 
   const sinDespacharRowsView = useMemo(() => {
     const start = sinDespacharPage * PAGE_SIZE;
-    return sinDespacharRows.slice(start, start + PAGE_SIZE);
-  }, [sinDespacharPage, sinDespacharRows]);
+    return sinDespacharRowsFiltered.slice(start, start + PAGE_SIZE);
+  }, [sinDespacharPage, sinDespacharRowsFiltered]);
 
   const estancadosRows = useMemo(() => {
     if (!data) return [];
@@ -1805,6 +1861,8 @@ export default function DashboardClient() {
             <h2>Pedidos a reprogramar</h2>
             <p>Superaron 48hs sin gestión</p>
           </div>
+        </div>
+        <div className="sectionToolbar">
           <div className="sectionActions">
             <div className="pager">
               <button
@@ -1818,7 +1876,7 @@ export default function DashboardClient() {
                 ←
               </button>
               <span className="sub mono">
-                {reprogramarRows.length} · {reprogramarPage + 1}/{reprogramarPages}
+                {reprogramarRowsFiltered.length} · {reprogramarPage + 1}/{reprogramarPages}
               </span>
               <button
                 className="btn btnIcon"
@@ -1831,8 +1889,31 @@ export default function DashboardClient() {
                 →
               </button>
             </div>
+            <div className="dtRange" aria-label="Filtro por fecha y hora">
+              <input
+                className="dtInput"
+                type="datetime-local"
+                value={reprogramarFromDt}
+                onChange={(e) => setReprogramarFromDt(e.target.value)}
+                aria-label="Desde"
+              />
+              <span className="sub">→</span>
+              <input
+                className="dtInput"
+                type="datetime-local"
+                value={reprogramarToDt}
+                onChange={(e) => setReprogramarToDt(e.target.value)}
+                aria-label="Hasta"
+              />
+              {(reprogramarFromDt || reprogramarToDt) && (
+                <button className="btn btnIcon" type="button" onClick={() => (setReprogramarFromDt(""), setReprogramarToDt(""))} title="Limpiar filtro">
+                  ×
+                </button>
+              )}
+            </div>
             <CopyActionButton
               label="Wpp"
+              className="btnPanelAction"
               onCopy={async () => {
                 const headers = ["#pedido", "fecha", "franja"];
                 const rows = reprogramarRows.map((r) => [
@@ -1845,6 +1926,7 @@ export default function DashboardClient() {
             />
             <CopyActionButton
               label="Mail"
+              className="btnPanelAction"
               onCopy={async () => {
                 const headers = ["#pedido", "fecha y hora", "franja", "cliente", "domicilio", "producto", "petshop"];
                 const rows = reprogramarRows.map((r) => [
@@ -1869,7 +1951,7 @@ export default function DashboardClient() {
               }}
             />
             <button
-              className="btn"
+              className="btn btnPanelAction"
               type="button"
               onClick={() => {
                 const headers = ["pedido", "fecha_y_hora", "franja", "cliente", "domicilio", "producto", "petshop"];
@@ -1936,6 +2018,8 @@ export default function DashboardClient() {
             <h2>Demorado sin despachar</h2>
             <p>Etiqueta impresa &gt;24hs sin driver</p>
           </div>
+        </div>
+        <div className="sectionToolbar">
           <div className="sectionActions">
             <div className="pager">
               <button
@@ -1949,7 +2033,7 @@ export default function DashboardClient() {
                 ←
               </button>
               <span className="sub mono">
-                {sinDespacharRows.length} · {sinDespacharPage + 1}/{sinDespacharPages}
+                {sinDespacharRowsFiltered.length} · {sinDespacharPage + 1}/{sinDespacharPages}
               </span>
               <button
                 className="btn btnIcon"
@@ -1962,8 +2046,31 @@ export default function DashboardClient() {
                 →
               </button>
             </div>
+            <div className="dtRange" aria-label="Filtro por fecha y hora">
+              <input
+                className="dtInput"
+                type="datetime-local"
+                value={sinDespacharFromDt}
+                onChange={(e) => setSinDespacharFromDt(e.target.value)}
+                aria-label="Desde"
+              />
+              <span className="sub">→</span>
+              <input
+                className="dtInput"
+                type="datetime-local"
+                value={sinDespacharToDt}
+                onChange={(e) => setSinDespacharToDt(e.target.value)}
+                aria-label="Hasta"
+              />
+              {(sinDespacharFromDt || sinDespacharToDt) && (
+                <button className="btn btnIcon" type="button" onClick={() => (setSinDespacharFromDt(""), setSinDespacharToDt(""))} title="Limpiar filtro">
+                  ×
+                </button>
+              )}
+            </div>
             <CopyActionButton
               label="Wpp"
+              className="btnPanelAction"
               onCopy={async () => {
                 const headers = ["#pedido", "fecha", "franja"];
                 const rows = sinDespacharRows.map((r) => [
@@ -1976,6 +2083,7 @@ export default function DashboardClient() {
             />
             <CopyActionButton
               label="Mail"
+              className="btnPanelAction"
               onCopy={async () => {
                 const headers = ["#pedido", "etiqueta impresa", "franja", "cliente", "domicilio", "producto", "petshop", "horas espera"];
                 const rows = sinDespacharRows.map((r) => [
@@ -2000,7 +2108,7 @@ export default function DashboardClient() {
               }}
             />
             <button
-              className="btn"
+              className="btn btnPanelAction"
               type="button"
               onClick={() => {
                 const headers = ["pedido", "etiqueta_impresa", "franja", "cliente", "domicilio", "producto", "petshop", "horas_espera"];
