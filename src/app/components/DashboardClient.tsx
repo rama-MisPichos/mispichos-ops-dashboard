@@ -370,7 +370,31 @@ function LineMini({
   );
 }
 
-function CopyButton({ getText }: { getText: () => string }) {
+function htmlEscape(s: string) {
+  return (s ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function toHtmlTable(headers: string[], rows: string[][]) {
+  const thead = `<thead><tr>${headers.map((h) => `<th>${htmlEscape(h)}</th>`).join("")}</tr></thead>`;
+  const tbody = `<tbody>${rows
+    .map((r) => `<tr>${r.map((c) => `<td>${htmlEscape(c ?? "")}</td>`).join("")}</tr>`)
+    .join("")}</tbody>`;
+  // Inline styles so it pastes nicely into mail clients.
+  return `<table border="1" cellspacing="0" cellpadding="6" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;font-size:12px">${thead}${tbody}</table>`;
+}
+
+function CopyActionButton({
+  label,
+  onCopy,
+}: {
+  label: string;
+  onCopy: () => Promise<void> | void;
+}) {
   const [copied, setCopied] = useState(false);
   const tRef = useRef<number | null>(null);
 
@@ -380,16 +404,16 @@ function CopyButton({ getText }: { getText: () => string }) {
     };
   }, []);
 
-  async function onCopy() {
-    await navigator.clipboard.writeText(getText());
+  async function handleCopy() {
+    await onCopy();
     setCopied(true);
     if (tRef.current) window.clearTimeout(tRef.current);
     tRef.current = window.setTimeout(() => setCopied(false), 1800);
   }
 
   return (
-    <button className="btn" onClick={onCopy} type="button">
-      {copied ? "Copiado!" : "Copiar registros"}
+    <button className="btn" onClick={handleCopy} type="button">
+      {copied ? "Copiado!" : label}
     </button>
   );
 }
@@ -1807,8 +1831,21 @@ export default function DashboardClient() {
                 →
               </button>
             </div>
-            <CopyButton
-              getText={() => {
+            <CopyActionButton
+              label="Wpp"
+              onCopy={async () => {
+                const headers = ["#pedido", "fecha", "franja"];
+                const rows = reprogramarRows.map((r) => [
+                  r.orderId,
+                  new Date(r.createdAt).toLocaleDateString("es-AR"),
+                  r.deliveryWindow ?? "",
+                ]);
+                await navigator.clipboard.writeText(toFixedWidthTable(headers, rows, { maxColWidths: [9, 10, 7], wrapInCodeBlock: false }));
+              }}
+            />
+            <CopyActionButton
+              label="Mail"
+              onCopy={async () => {
                 const headers = ["#pedido", "fecha y hora", "franja", "cliente", "domicilio", "producto", "petshop"];
                 const rows = reprogramarRows.map((r) => [
                   r.orderId,
@@ -1819,7 +1856,16 @@ export default function DashboardClient() {
                   r.product,
                   r.petshopName ?? "",
                 ]);
-                return toFixedWidthTable(headers, rows, { maxColWidths: [9, 19, 7, 18, 22, 26, 16], wrapInCodeBlock: true });
+                const text = toFixedWidthTable(headers, rows, { maxColWidths: [9, 19, 7, 18, 22, 26, 16], wrapInCodeBlock: true });
+                const html = toHtmlTable(headers, rows);
+                // Prefer HTML for mail clients; keep text fallback.
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const ClipboardItemCtor: any = (window as any).ClipboardItem;
+                if (ClipboardItemCtor && navigator.clipboard?.write) {
+                  await navigator.clipboard.write([new ClipboardItemCtor({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]);
+                } else {
+                  await navigator.clipboard.writeText(text);
+                }
               }}
             />
             <button
@@ -1916,8 +1962,21 @@ export default function DashboardClient() {
                 →
               </button>
             </div>
-            <CopyButton
-              getText={() => {
+            <CopyActionButton
+              label="Wpp"
+              onCopy={async () => {
+                const headers = ["#pedido", "fecha", "franja"];
+                const rows = sinDespacharRows.map((r) => [
+                  r.orderId,
+                  new Date(r.labelPrintedAt).toLocaleDateString("es-AR"),
+                  r.deliveryWindow ?? "",
+                ]);
+                await navigator.clipboard.writeText(toFixedWidthTable(headers, rows, { maxColWidths: [9, 10, 7], wrapInCodeBlock: false }));
+              }}
+            />
+            <CopyActionButton
+              label="Mail"
+              onCopy={async () => {
                 const headers = ["#pedido", "etiqueta impresa", "franja", "cliente", "domicilio", "producto", "petshop", "horas espera"];
                 const rows = sinDespacharRows.map((r) => [
                   r.orderId,
@@ -1929,7 +1988,15 @@ export default function DashboardClient() {
                   r.petshopName ?? "",
                   `${round0(r.waitHours)}h`,
                 ]);
-                return toFixedWidthTable(headers, rows, { maxColWidths: [9, 19, 7, 18, 22, 26, 16, 11], wrapInCodeBlock: true });
+                const text = toFixedWidthTable(headers, rows, { maxColWidths: [9, 19, 7, 18, 22, 26, 16, 11], wrapInCodeBlock: true });
+                const html = toHtmlTable(headers, rows);
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const ClipboardItemCtor: any = (window as any).ClipboardItem;
+                if (ClipboardItemCtor && navigator.clipboard?.write) {
+                  await navigator.clipboard.write([new ClipboardItemCtor({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]);
+                } else {
+                  await navigator.clipboard.writeText(text);
+                }
               }}
             />
             <button
