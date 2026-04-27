@@ -27,7 +27,7 @@ const QUICK_ACCESS: QuickAccessItem[] = [
   { topic: "En vivo", id: "top3", label: "Top 3 petshops" },
   { topic: "Incidencias", id: "reprogramar", label: "Pedidos a reprogramar" },
   { topic: "Incidencias", id: "sin-despachar", label: "Demorado sin despachar" },
-  { topic: "Operación", id: "demoras", label: "Demoras 1ra/2da vuelta" },
+  { topic: "Operación", id: "demoras", label: "1ra/2da vuelta" },
   { topic: "Operación", id: "estancados", label: "Estancados / Cierres manuales" },
   { topic: "Riesgo", id: "cancelados", label: "Cancelados" },
   { topic: "Riesgo", id: "spliteados", label: "Pedidos spliteados" },
@@ -752,7 +752,8 @@ export default function DashboardClient() {
       cancel,
       cancelPct: pct(cancel, total),
       split,
-      splitPct: pct(split, total),
+      // Spliteados se mide sobre transacciones (no sobre órdenes).
+      splitPct: pct(split, transacciones),
       newClients,
       recurrentClients,
       newPct: pct(newClients, newClients + recurrentClients),
@@ -891,7 +892,7 @@ export default function DashboardClient() {
 
   const estancadosRowsView = useMemo(() => estancadosRows.slice(0, 5), [estancadosRows]);
 
-  const d1Bars = useMemo(() => {
+  const vuelta1Bars = useMemo(() => {
     if (!data) return [];
     const rows = data.metricsByPetshop
       .map((m) => ({ id: m.petshopId, label: m.petshopName, valuePct: m.vuelta1pct, count: m.vuelta1 }))
@@ -900,7 +901,7 @@ export default function DashboardClient() {
     return rows.filter((r) => r.id === petshopId);
   }, [data, petshopId]);
 
-  const d2Bars = useMemo(() => {
+  const vuelta2Bars = useMemo(() => {
     if (!data) return [];
     const rows = data.metricsByPetshop
       .map((m) => ({ id: m.petshopId, label: m.petshopName, valuePct: m.vuelta2pct, count: m.vuelta2 }))
@@ -1100,16 +1101,17 @@ export default function DashboardClient() {
 
   const globalSplitBadge = useMemo(() => {
     const list = data?.metricsByPetshop ?? [];
-    const total = list.reduce((acc, m) => acc + m.total, 0);
+    const total = list.reduce((acc, m) => acc + m.transacciones, 0);
     const split = list.reduce((acc, m) => acc + m.split, 0);
     return { split, pct: round0(pct(split, total)) };
   }, [data?.metricsByPetshop]);
 
   const splitSummary = useMemo(() => {
     if (!metricsSelected) return null;
-    if (petshopId === "ALL") return { split: globalSplitBadge.split, pct0: globalSplitBadge.pct, total: metricsAll?.total ?? metricsSelected.total };
-    return { split: metricsSelected.split ?? 0, pct0: round0(metricsSelected.splitPct ?? 0), total: metricsSelected.total ?? 0 };
-  }, [globalSplitBadge.pct, globalSplitBadge.split, metricsAll?.total, metricsSelected, petshopId]);
+    if (petshopId === "ALL")
+      return { split: globalSplitBadge.split, pct0: globalSplitBadge.pct, total: metricsAll?.transacciones ?? metricsSelected.transacciones };
+    return { split: metricsSelected.split ?? 0, pct0: round0(metricsSelected.splitPct ?? 0), total: metricsSelected.transacciones ?? 0 };
+  }, [globalSplitBadge.pct, globalSplitBadge.split, metricsAll?.transacciones, metricsSelected, petshopId]);
 
   const viewPillText = petshopId === "ALL" ? "Vista global" : activePetshop?.name ?? "Petshop";
 
@@ -2176,7 +2178,7 @@ export default function DashboardClient() {
       <section className="section" id="demoras">
         <div className="sectionHeader">
           <div>
-            <h2>Demoras 1ra vuelta y 2da vuelta</h2>
+            <h2>1ra vuelta y 2da vuelta</h2>
             <p>Porcentaje por petshop</p>
           </div>
         </div>
@@ -2185,13 +2187,13 @@ export default function DashboardClient() {
             <div className="miniHeader">
               <div className="miniTitle">1ra vuelta</div>
             </div>
-            <BarList items={d1Bars} color="var(--warn)" />
+            <BarList items={vuelta1Bars} color="var(--warn)" />
           </div>
           <div className="miniCard">
             <div className="miniHeader">
               <div className="miniTitle">2da vuelta</div>
             </div>
-            <BarList items={d2Bars} color="color-mix(in srgb, var(--bad) 75%, transparent)" />
+            <BarList items={vuelta2Bars} color="color-mix(in srgb, var(--bad) 75%, transparent)" />
           </div>
         </div>
       </section>
@@ -2288,8 +2290,8 @@ export default function DashboardClient() {
       <section className="section" id="spliteados">
         <div className="sectionHeader">
           <div>
-            <h2>Pedidos spliteados</h2>
-            <p>Órdenes con 2+ pedidos de distintos petshops</p>
+            <h2>Transacciones spliteadas</h2>
+            <p>Transacciones con 2+ compras asignadas a distintos petshops</p>
           </div>
         </div>
         <div className="twoCol">
@@ -2302,7 +2304,7 @@ export default function DashboardClient() {
               <div>
                 <div className="value mono">{splitSummary ? splitSummary.split.toLocaleString("es-AR") : "—"}</div>
                 <div className="sub">
-                  {splitSummary ? `sobre ${splitSummary.total.toLocaleString("es-AR")} pedidos` : "—"}
+                  {splitSummary ? `sobre ${splitSummary.total.toLocaleString("es-AR")} transacciones` : "—"}
                 </div>
               </div>
             </div>

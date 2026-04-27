@@ -372,8 +372,11 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
     const vuelta1pct = clamp((vuelta1 / Math.max(1, baseTotal)) * 100, 0, 100);
     const vuelta2pct = clamp((vuelta2 / Math.max(1, baseTotal)) * 100, 0, 100);
 
-    const split = round0(baseTotal * (0.01 + rnd() * 0.04));
-    const splitPct = clamp((split / Math.max(1, baseTotal)) * 100, 0, 100);
+    // "Spliteados" es sobre transacciones (tickets), no sobre compras/órdenes.
+    // Una transacción cuenta como spliteada si tiene 2+ compras asignadas a 2+ petshops distintos.
+    // En el mock lo aproximamos como una fracción de las transacciones del petshop.
+    const split = Math.min(transacciones, round0(transacciones * (0.01 + rnd() * 0.06)));
+    const splitPct = clamp((split / Math.max(1, transacciones)) * 100, 0, 100);
 
     const newClients = round0(baseTotal * (0.22 + rnd() * 0.18));
     const recurrentClients = Math.max(0, baseTotal - newClients);

@@ -38,7 +38,8 @@ function buildKpiSummary(data: OpsDashboardResponse, from: string, to: string) {
     },
     spliteados: {
       count: spliteados,
-      pct: totalOrders > 0 ? (spliteados / totalOrders) * 100 : 0,
+      // Spliteados se interpreta como transacciones spliteadas (no compras/órdenes).
+      pct: totalTransactions > 0 ? (spliteados / totalTransactions) * 100 : 0,
     },
     top3Petshops: data.top3Petshops.map((p) => ({
       name: p.petshopName,
