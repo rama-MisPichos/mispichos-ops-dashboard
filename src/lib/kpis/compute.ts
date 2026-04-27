@@ -63,12 +63,12 @@ export function isEstancado(order: OrderSummary) {
   return Boolean(order.misPichosAssignedAt) && !order.petchopAssignedAt;
 }
 
-export function isDemorado1raVuelta(order: OrderSummary, nowIso: string) {
+export function is1raVuelta(order: OrderSummary, nowIso: string) {
   if (!order.firstAttemptAt) return false;
   return hoursBetween(order.firstAttemptAt, nowIso) > 24 && hoursBetween(order.firstAttemptAt, nowIso) <= 48;
 }
 
-export function isDemorado2daVuelta(order: OrderSummary, nowIso: string) {
+export function is2daVuelta(order: OrderSummary, nowIso: string) {
   if (!order.secondAttemptAt) return false;
   return hoursBetween(order.secondAttemptAt, nowIso) > 48;
 }
@@ -93,14 +93,14 @@ export function computeOperationsKpis(ds: OperationsDataset): {
   const reprogramar = ds.orders.filter((o) => isReprogramar(o, nowIso));
   const sinDespachar = ds.orders.filter((o) => isDemoradoSinDespachar(o, nowIso));
   const estancados = ds.orders.filter((o) => isEstancado(o));
-  const dem1 = ds.orders.filter((o) => isDemorado1raVuelta(o, nowIso));
-  const dem2 = ds.orders.filter((o) => isDemorado2daVuelta(o, nowIso));
+  const v1 = ds.orders.filter((o) => is1raVuelta(o, nowIso));
+  const v2 = ds.orders.filter((o) => is2daVuelta(o, nowIso));
 
   const pctReprog = safePercent(reprogramar.length, totalOrders);
   const pctSinDesp = safePercent(sinDespachar.length, totalOrders);
   const pctEstanc = safePercent(estancados.length, totalOrders);
-  const pctDem1 = safePercent(dem1.length, totalOrders);
-  const pctDem2 = safePercent(dem2.length, totalOrders);
+  const pctV1 = safePercent(v1.length, totalOrders);
+  const pctV2 = safePercent(v2.length, totalOrders);
 
   const cards: KpiCard[] = [
     {
@@ -128,7 +128,7 @@ export function computeOperationsKpis(ds: OperationsDataset): {
     },
     {
       id: "sin_despachar",
-      title: "Sin despachar (>24hs)",
+      title: "Demorado sin despachar (>24hs)",
       subtitle: "Etiqueta impresa, sin driver",
       absolute: sinDespachar.length,
       percent: pctSinDesp,
@@ -145,30 +145,30 @@ export function computeOperationsKpis(ds: OperationsDataset): {
       targetPercent: 20,
     },
     {
-      id: "demorado_vueltas",
-      title: "Demorados (1ra/2da vuelta)",
+      id: "vueltas",
+      title: "Vueltas (1ra/2da)",
       subtitle: "1ra >24hs, 2da >48hs",
-      absolute: dem1.length + dem2.length,
-      percent: safePercent(dem1.length + dem2.length, totalOrders),
-      status: statusByPercentBadHigh(safePercent(dem1.length + dem2.length, totalOrders)),
+      absolute: v1.length + v2.length,
+      percent: safePercent(v1.length + v2.length, totalOrders),
+      status: statusByPercentBadHigh(safePercent(v1.length + v2.length, totalOrders)),
       targetPercent: 20,
     },
     {
-      id: "demorado_1ra",
-      title: "Demorado 1ra vuelta",
+      id: "vuelta_1ra",
+      title: "1ra vuelta",
       subtitle: "Más de 24hs",
-      absolute: dem1.length,
-      percent: pctDem1,
-      status: statusByPercentBadHigh(pctDem1),
+      absolute: v1.length,
+      percent: pctV1,
+      status: statusByPercentBadHigh(pctV1),
       targetPercent: 20,
     },
     {
-      id: "demorado_2da",
-      title: "Demorado 2da vuelta",
+      id: "vuelta_2da",
+      title: "2da vuelta",
       subtitle: "Más de 48hs",
-      absolute: dem2.length,
-      percent: pctDem2,
-      status: statusByPercentBadHigh(pctDem2),
+      absolute: v2.length,
+      percent: pctV2,
+      status: statusByPercentBadHigh(pctV2),
       targetPercent: 20,
     },
   ];

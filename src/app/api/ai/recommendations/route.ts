@@ -6,8 +6,8 @@ type KpiSummary = {
   reprogramar: { count: number; pct: number };
   sinDespachar: { count: number };
   estancados: { count: number };
-  demorado1ra: { count: number };
-  demorado2da: { count: number };
+  vuelta1: { count: number };
+  vuelta2: { count: number };
   cancelados: { count: number; pct: number };
   spliteados: { count: number; pct: number };
   top3Petshops: { name: string; pct: number; orders: number }[];
@@ -28,10 +28,10 @@ A continuación los KPIs operativos del período ${kpis.range.from} al ${kpis.ra
 - Total de transacciones: ${kpis.totalTransactions}
 - Service Level (SL): ${kpis.slPct !== null ? `${kpis.slPct.toFixed(1)}%` : "sin datos"}
 - Pedidos a reprogramar (>48hs fuera de SLA): ${kpis.reprogramar.count} (${kpis.reprogramar.pct.toFixed(1)}%)
-- Demorados sin despachar (etiqueta impresa >24hs sin driver): ${kpis.sinDespachar.count}
+- Demorado sin despachar (etiqueta impresa >24hs sin driver): ${kpis.sinDespachar.count}
 - Estancados (MisPichos asignado, sin Petchop): ${kpis.estancados.count}
-- Demorados 1ra vuelta (>24hs): ${kpis.demorado1ra.count}
-- Demorados 2da vuelta (>48hs): ${kpis.demorado2da.count}
+- 1ra vuelta: ${kpis.vuelta1.count}
+- 2da vuelta: ${kpis.vuelta2.count}
 - Cancelados: ${kpis.cancelados.count} (${kpis.cancelados.pct.toFixed(1)}%)
 - Pedidos spliteados: ${kpis.spliteados.count} (${kpis.spliteados.pct.toFixed(1)}%)
 

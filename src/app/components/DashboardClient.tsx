@@ -467,7 +467,7 @@ function DeltaPill({ deltaPct, mode = "higher_better" }: { deltaPct: number; mod
   const dir = r > 0 ? "up" : r < 0 ? "down" : "flat";
   const arrow = r > 0 ? "↗" : r < 0 ? "↘" : "→";
   return (
-    <span className={`deltaPill deltaPill-${dir}`} style={{ color: deltaColorForMetric(deltaPct, mode) }}>
+    <span className={`deltaText deltaText-${dir}`} style={{ color: deltaColorForMetric(deltaPct, mode) }}>
       <span className="deltaArrow" aria-hidden="true">
         {arrow}
       </span>
@@ -490,6 +490,28 @@ function stableDeltaPctFor(key: string) {
   const r01 = (Math.abs(hash) % 1000) / 1000; // 0..0.999
   return (r01 - 0.45) * 18; // ~ -8.1% .. +9.9%
 }
+
+type DeltaBgTone = "ok" | "bad" | "neutral";
+
+function deltaBgTone(deltaPct: number, mode: "higher_better" | "lower_better", neutralAbsPct: number) {
+  const r = round0(deltaPct);
+  if (!Number.isFinite(r) || Math.abs(r) < neutralAbsPct) return "neutral";
+  if (mode === "higher_better") return r > 0 ? "ok" : "bad";
+  return r < 0 ? "ok" : "bad";
+}
+
+function deltaBgClass(t: DeltaBgTone) {
+  return t === "ok" ? "kpiBgOk" : t === "bad" ? "kpiBgBad" : "kpiBgNeutral";
+}
+
+const KPI_DELTA_BG = {
+  total: { mode: "higher_better" as const, neutralAbsPct: 1 },
+  cancel: { mode: "lower_better" as const, neutralAbsPct: 1 },
+  vuelta1: { mode: "lower_better" as const, neutralAbsPct: 1 },
+  vuelta2: { mode: "lower_better" as const, neutralAbsPct: 1 },
+  demSinDespachar: { mode: "lower_better" as const, neutralAbsPct: 1 },
+  reprog: { mode: "lower_better" as const, neutralAbsPct: 1 },
+};
 
 function WindowPill({ win }: { win?: "10-14" | "14-18" | "18-22" | "14-22" | null }) {
   if (!win) return <span className="sub">—</span>;
@@ -613,9 +635,9 @@ export default function DashboardClient() {
     const total = sum((m) => m.total);
     const delivered = sum((m) => m.delivered);
     const transacciones = sum((m) => m.transacciones);
-    const sindesp = sum((m) => m.sindesp);
-    const d1 = sum((m) => m.d1);
-    const d2 = sum((m) => m.d2);
+    const demSinDespachar = sum((m) => m.demSinDespachar);
+    const vuelta1 = sum((m) => m.vuelta1);
+    const vuelta2 = sum((m) => m.vuelta2);
     const reprog = sum((m) => m.reprog);
     const cancel = sum((m) => m.cancel);
     const split = sum((m) => m.split);
@@ -633,11 +655,11 @@ export default function DashboardClient() {
       total,
       delivered,
       transacciones,
-      sindesp,
-      d1,
-      d1pct: pct(d1, total),
-      d2,
-      d2pct: pct(d2, total),
+      demSinDespachar,
+      vuelta1,
+      vuelta1pct: pct(vuelta1, total),
+      vuelta2,
+      vuelta2pct: pct(vuelta2, total),
       reprog,
       cancel,
       cancelPct: pct(cancel, total),
@@ -729,7 +751,7 @@ export default function DashboardClient() {
   const d1Bars = useMemo(() => {
     if (!data) return [];
     const rows = data.metricsByPetshop
-      .map((m) => ({ id: m.petshopId, label: m.petshopName, valuePct: m.d1pct, count: m.d1 }))
+      .map((m) => ({ id: m.petshopId, label: m.petshopName, valuePct: m.vuelta1pct, count: m.vuelta1 }))
       .sort((a, b) => b.valuePct - a.valuePct);
     if (petshopId === "ALL") return rows;
     return rows.filter((r) => r.id === petshopId);
@@ -738,7 +760,7 @@ export default function DashboardClient() {
   const d2Bars = useMemo(() => {
     if (!data) return [];
     const rows = data.metricsByPetshop
-      .map((m) => ({ id: m.petshopId, label: m.petshopName, valuePct: m.d2pct, count: m.d2 }))
+      .map((m) => ({ id: m.petshopId, label: m.petshopName, valuePct: m.vuelta2pct, count: m.vuelta2 }))
       .sort((a, b) => b.valuePct - a.valuePct);
     if (petshopId === "ALL") return rows;
     return rows.filter((r) => r.id === petshopId);
@@ -1270,7 +1292,13 @@ export default function DashboardClient() {
         </div>
 
         <div className="kpiRow">
-          <div className="kpiMain">
+          <div
+            className={`kpiMain ${
+              metricsSelected && totalDeltaPct != null
+                ? deltaBgClass(deltaBgTone(totalDeltaPct, KPI_DELTA_BG.total.mode, KPI_DELTA_BG.total.neutralAbsPct))
+                : "kpiBgNeutral"
+            }`}
+          >
             <div className="kpiLabel">Total pedidos</div>
             <div className="kpiValueRow">
               <div className="kpiValue">{metricsSelected ? metricsSelected.total.toLocaleString("es-AR") : "—"}</div>
@@ -1296,143 +1324,188 @@ export default function DashboardClient() {
           </div>
 
           <div className="kpiSmallGrid">
-            <div className="kpiSmall">
-              <div className="kpiLabel">Sin despachar</div>
-              {metricsSelected ? (
-                (() => {
-                  const d = stableDeltaPctFor(`${petshopId}|${from}|${to}|sindesp`);
-                  const prev = previousFromDelta(metricsSelected.sindesp ?? 0, d);
-                  const tone = toneByRate(metricsSelected.sindesp / Math.max(1, metricsSelected.total), 0.03, 0.06);
-                  return (
-                    <>
-                      <div className="kpiValueRow">
-                        <div className="kpiValue" style={{ color: toneColor(tone) }}>
-                          {metricsSelected.sindesp}
-                        </div>
-                        <div className="kpiDeltaRight">{prev != null ? <DeltaPill deltaPct={d} mode="lower_better" /> : <span className="sub">—</span>}</div>
-                      </div>
-                      <div className="kpiSub">{prev != null ? <span className="mono">Anterior: {round0(prev).toLocaleString("es-AR")}</span> : "—"}</div>
-                    </>
-                  );
-                })()
-              ) : (
-                <>
-                  <div className="kpiValueRow">
-                    <div className="kpiValue">—</div>
-                    <div className="kpiDeltaRight">
-                      <span className="sub">—</span>
-                    </div>
-                  </div>
-                  <div className="kpiSub">—</div>
-                </>
-              )}
-            </div>
-            <div className="kpiSmall">
-              <div className="kpiLabel">Demorados 1ra vuelta</div>
-              {metricsSelected ? (
-                (() => {
-                  const d = stableDeltaPctFor(`${petshopId}|${from}|${to}|d1`);
-                  const prev = previousFromDelta(metricsSelected.d1 ?? 0, d);
-                  const tone = toneByRate(metricsSelected.d1pct / 100, 0.03, 0.06);
-                  return (
-                    <>
-                      <div className="kpiValueRow">
-                        <div className="kpiValue" style={{ color: toneColor(tone) }}>
-                          {metricsSelected.d1}
-                        </div>
-                        <div className="kpiDeltaRight">{prev != null ? <DeltaPill deltaPct={d} mode="lower_better" /> : <span className="sub">—</span>}</div>
-                      </div>
-                      <div className="kpiSub">{prev != null ? <span className="mono">Anterior: {round0(prev).toLocaleString("es-AR")}</span> : "—"}</div>
-                    </>
-                  );
-                })()
-              ) : (
-                <>
-                  <div className="kpiValueRow">
-                    <div className="kpiValue">—</div>
-                    <div className="kpiDeltaRight">
-                      <span className="sub">—</span>
-                    </div>
-                  </div>
-                  <div className="kpiSub">—</div>
-                </>
-              )}
-            </div>
-            <div className="kpiSmall">
-              <div className="kpiLabel">Demorados 2da vuelta</div>
-              {metricsSelected ? (
-                (() => {
-                  const d = stableDeltaPctFor(`${petshopId}|${from}|${to}|d2`);
-                  const prev = previousFromDelta(metricsSelected.d2 ?? 0, d);
-                  const tone = toneByRate(metricsSelected.d2pct / 100, 0.015, 0.03);
-                  return (
-                    <>
-                      <div className="kpiValueRow">
-                        <div className="kpiValue" style={{ color: toneColor(tone) }}>
-                          {metricsSelected.d2}
-                        </div>
-                        <div className="kpiDeltaRight">{prev != null ? <DeltaPill deltaPct={d} mode="lower_better" /> : <span className="sub">—</span>}</div>
-                      </div>
-                      <div className="kpiSub">{prev != null ? <span className="mono">Anterior: {round0(prev).toLocaleString("es-AR")}</span> : "—"}</div>
-                    </>
-                  );
-                })()
-              ) : (
-                <>
-                  <div className="kpiValueRow">
-                    <div className="kpiValue">—</div>
-                    <div className="kpiDeltaRight">
-                      <span className="sub">—</span>
-                    </div>
-                  </div>
-                  <div className="kpiSub">—</div>
-                </>
-              )}
-            </div>
-            <div className="kpiSmall kpiSmallWide">
-              <div className="kpiLabel">Reprogramar</div>
-              {metricsSelected ? (
-                (() => {
-                  const d = stableDeltaPctFor(`${petshopId}|${from}|${to}|reprog`);
-                  const prev = previousFromDelta(metricsSelected.reprog ?? 0, d);
-                  const tone = toneByRate(metricsSelected.reprog / Math.max(1, metricsSelected.total), 0.02, 0.04);
-                  return (
-                    <>
-                      <div className="kpiValueRow">
-                        <div className="kpiValue" style={{ color: toneColor(tone) }}>
-                          {metricsSelected.reprog}
-                        </div>
-                        <div className="kpiDeltaRight">{prev != null ? <DeltaPill deltaPct={d} mode="lower_better" /> : <span className="sub">—</span>}</div>
-                      </div>
-                      <div className="kpiSub">{prev != null ? <span className="mono">Anterior: {round0(prev).toLocaleString("es-AR")}</span> : "—"}</div>
-                    </>
-                  );
-                })()
-              ) : (
-                <>
-                  <div className="kpiValueRow">
-                    <div className="kpiValue">—</div>
-                    <div className="kpiDeltaRight">
-                      <span className="sub">—</span>
-                    </div>
-                  </div>
-                  <div className="kpiSub">—</div>
-                </>
-              )}
-            </div>
-            <div className="kpiSmall kpiSmallWide">
+            <div
+              className={`kpiSmall ${
+                metricsSelected
+                  ? deltaBgClass(
+                      deltaBgTone(
+                        stableDeltaPctFor(`${petshopId}|${from}|${to}|cancel`),
+                        KPI_DELTA_BG.cancel.mode,
+                        KPI_DELTA_BG.cancel.neutralAbsPct
+                      )
+                    )
+                  : "kpiBgNeutral"
+              }`}
+            >
               <div className="kpiLabel">Cancelados</div>
               {metricsSelected ? (
                 (() => {
                   const d = stableDeltaPctFor(`${petshopId}|${from}|${to}|cancel`);
                   const prev = previousFromDelta(metricsSelected.cancel ?? 0, d);
-                  const tone = toneByRate(metricsSelected.cancelPct / 100, 0.02, 0.04);
                   return (
                     <>
                       <div className="kpiValueRow">
-                        <div className="kpiValue" style={{ color: toneColor(tone) }}>
-                          {metricsSelected.cancel}
-                        </div>
+                        <div className="kpiValue">{metricsSelected.cancel}</div>
+                        <div className="kpiDeltaRight">{prev != null ? <DeltaPill deltaPct={d} mode="lower_better" /> : <span className="sub">—</span>}</div>
+                      </div>
+                      <div className="kpiSub">{prev != null ? <span className="mono">Anterior: {round0(prev).toLocaleString("es-AR")}</span> : "—"}</div>
+                    </>
+                  );
+                })()
+              ) : (
+                <>
+                  <div className="kpiValueRow">
+                    <div className="kpiValue">—</div>
+                    <div className="kpiDeltaRight">
+                      <span className="sub">—</span>
+                    </div>
+                  </div>
+                  <div className="kpiSub">—</div>
+                </>
+              )}
+            </div>
+            <div
+              className={`kpiSmall ${
+                metricsSelected
+                  ? deltaBgClass(
+                      deltaBgTone(
+                        stableDeltaPctFor(`${petshopId}|${from}|${to}|vuelta1`),
+                        KPI_DELTA_BG.vuelta1.mode,
+                        KPI_DELTA_BG.vuelta1.neutralAbsPct
+                      )
+                    )
+                  : "kpiBgNeutral"
+              }`}
+            >
+              <div className="kpiLabel">1ra vuelta</div>
+              {metricsSelected ? (
+                (() => {
+                  const d = stableDeltaPctFor(`${petshopId}|${from}|${to}|vuelta1`);
+                  const prev = previousFromDelta(metricsSelected.vuelta1 ?? 0, d);
+                  return (
+                    <>
+                      <div className="kpiValueRow">
+                        <div className="kpiValue">{metricsSelected.vuelta1}</div>
+                        <div className="kpiDeltaRight">{prev != null ? <DeltaPill deltaPct={d} mode="lower_better" /> : <span className="sub">—</span>}</div>
+                      </div>
+                      <div className="kpiSub">{prev != null ? <span className="mono">Anterior: {round0(prev).toLocaleString("es-AR")}</span> : "—"}</div>
+                    </>
+                  );
+                })()
+              ) : (
+                <>
+                  <div className="kpiValueRow">
+                    <div className="kpiValue">—</div>
+                    <div className="kpiDeltaRight">
+                      <span className="sub">—</span>
+                    </div>
+                  </div>
+                  <div className="kpiSub">—</div>
+                </>
+              )}
+            </div>
+            <div
+              className={`kpiSmall ${
+                metricsSelected
+                  ? deltaBgClass(
+                      deltaBgTone(
+                        stableDeltaPctFor(`${petshopId}|${from}|${to}|vuelta2`),
+                        KPI_DELTA_BG.vuelta2.mode,
+                        KPI_DELTA_BG.vuelta2.neutralAbsPct
+                      )
+                    )
+                  : "kpiBgNeutral"
+              }`}
+            >
+              <div className="kpiLabel">2da vuelta</div>
+              {metricsSelected ? (
+                (() => {
+                  const d = stableDeltaPctFor(`${petshopId}|${from}|${to}|vuelta2`);
+                  const prev = previousFromDelta(metricsSelected.vuelta2 ?? 0, d);
+                  return (
+                    <>
+                      <div className="kpiValueRow">
+                        <div className="kpiValue">{metricsSelected.vuelta2}</div>
+                        <div className="kpiDeltaRight">{prev != null ? <DeltaPill deltaPct={d} mode="lower_better" /> : <span className="sub">—</span>}</div>
+                      </div>
+                      <div className="kpiSub">{prev != null ? <span className="mono">Anterior: {round0(prev).toLocaleString("es-AR")}</span> : "—"}</div>
+                    </>
+                  );
+                })()
+              ) : (
+                <>
+                  <div className="kpiValueRow">
+                    <div className="kpiValue">—</div>
+                    <div className="kpiDeltaRight">
+                      <span className="sub">—</span>
+                    </div>
+                  </div>
+                  <div className="kpiSub">—</div>
+                </>
+              )}
+            </div>
+            <div
+              className={`kpiSmall kpiSmallWide ${
+                metricsSelected
+                  ? deltaBgClass(
+                      deltaBgTone(
+                        stableDeltaPctFor(`${petshopId}|${from}|${to}|demSinDespachar`),
+                        KPI_DELTA_BG.demSinDespachar.mode,
+                        KPI_DELTA_BG.demSinDespachar.neutralAbsPct
+                      )
+                    )
+                  : "kpiBgNeutral"
+              }`}
+            >
+              <div className="kpiLabel">Demorado sin despachar</div>
+              {metricsSelected ? (
+                (() => {
+                  const d = stableDeltaPctFor(`${petshopId}|${from}|${to}|demSinDespachar`);
+                  const prev = previousFromDelta(metricsSelected.demSinDespachar ?? 0, d);
+                  return (
+                    <>
+                      <div className="kpiValueRow">
+                        <div className="kpiValue">{metricsSelected.demSinDespachar}</div>
+                        <div className="kpiDeltaRight">{prev != null ? <DeltaPill deltaPct={d} mode="lower_better" /> : <span className="sub">—</span>}</div>
+                      </div>
+                      <div className="kpiSub">{prev != null ? <span className="mono">Anterior: {round0(prev).toLocaleString("es-AR")}</span> : "—"}</div>
+                    </>
+                  );
+                })()
+              ) : (
+                <>
+                  <div className="kpiValueRow">
+                    <div className="kpiValue">—</div>
+                    <div className="kpiDeltaRight">
+                      <span className="sub">—</span>
+                    </div>
+                  </div>
+                  <div className="kpiSub">—</div>
+                </>
+              )}
+            </div>
+            <div
+              className={`kpiSmall kpiSmallWide ${
+                metricsSelected
+                  ? deltaBgClass(
+                      deltaBgTone(
+                        stableDeltaPctFor(`${petshopId}|${from}|${to}|reprog`),
+                        KPI_DELTA_BG.reprog.mode,
+                        KPI_DELTA_BG.reprog.neutralAbsPct
+                      )
+                    )
+                  : "kpiBgNeutral"
+              }`}
+            >
+              <div className="kpiLabel">Reprogramar</div>
+              {metricsSelected ? (
+                (() => {
+                  const d = stableDeltaPctFor(`${petshopId}|${from}|${to}|reprog`);
+                  const prev = previousFromDelta(metricsSelected.reprog ?? 0, d);
+                  return (
+                    <>
+                      <div className="kpiValueRow">
+                        <div className="kpiValue">{metricsSelected.reprog}</div>
                         <div className="kpiDeltaRight">{prev != null ? <DeltaPill deltaPct={d} mode="lower_better" /> : <span className="sub">—</span>}</div>
                       </div>
                       <div className="kpiSub">{prev != null ? <span className="mono">Anterior: {round0(prev).toLocaleString("es-AR")}</span> : "—"}</div>

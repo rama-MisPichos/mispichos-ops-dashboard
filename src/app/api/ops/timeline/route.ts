@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getMockOperationsDataset } from "@/lib/data/mockOperationsData";
 import {
   filterDatasetByPeriod,
-  isDemorado1raVuelta,
-  isDemorado2daVuelta,
+  is1raVuelta,
+  is2daVuelta,
   isDemoradoSinDespachar,
   isReprogramar,
 } from "@/lib/kpis/compute";
@@ -14,8 +14,8 @@ type Bucket = {
   transactions: number;
   reprogramar: number;
   sinDespachar: number;
-  demorado1ra: number;
-  demorado2da: number;
+  vuelta1: number;
+  vuelta2: number;
 };
 
 function startOfDayIso(iso: string) {
@@ -55,8 +55,8 @@ export async function GET(req: NextRequest) {
     transactions: 0,
     reprogramar: 0,
     sinDespachar: 0,
-    demorado1ra: 0,
-    demorado2da: 0,
+    vuelta1: 0,
+    vuelta2: 0,
   }));
 
   const idxByDay = new Map<string, number>();
@@ -69,8 +69,8 @@ export async function GET(req: NextRequest) {
     buckets[idx].orders += 1;
     if (isReprogramar(o, nowIso)) buckets[idx].reprogramar += 1;
     if (isDemoradoSinDespachar(o, nowIso)) buckets[idx].sinDespachar += 1;
-    if (isDemorado1raVuelta(o, nowIso)) buckets[idx].demorado1ra += 1;
-    if (isDemorado2daVuelta(o, nowIso)) buckets[idx].demorado2da += 1;
+    if (is1raVuelta(o, nowIso)) buckets[idx].vuelta1 += 1;
+    if (is2daVuelta(o, nowIso)) buckets[idx].vuelta2 += 1;
   }
 
   for (const t0 of filtered.transactions) {

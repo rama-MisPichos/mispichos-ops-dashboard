@@ -39,7 +39,7 @@ export type TimelineBucket = {
   transacciones: number;
   cancel: number;
   reprog: number;
-  sindesp: number;
+  demSinDespachar: number;
 };
 
 export type ManualCloseBucket = { t: string; count: number };
@@ -77,11 +77,11 @@ export type PetshopMetrics = {
   total: number;
   delivered: number;
   transacciones: number;
-  sindesp: number;
-  d1: number;
-  d1pct: number;
-  d2: number;
-  d2pct: number;
+  demSinDespachar: number;
+  vuelta1: number;
+  vuelta1pct: number;
+  vuelta2: number;
+  vuelta2pct: number;
   reprog: number;
   cancel: number;
   cancelPct: number;
@@ -360,17 +360,17 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
     const baseTotal = round0(180 + rnd() * 220);
     const transacciones = round0(baseTotal * (0.55 + rnd() * 0.2));
 
-    const sindesp = round0(baseTotal * (0.03 + rnd() * 0.06));
-    const d1 = round0(baseTotal * (0.03 + rnd() * 0.05));
-    const d2 = round0(baseTotal * (0.01 + rnd() * 0.03));
+    const demSinDespachar = round0(baseTotal * (0.03 + rnd() * 0.06));
+    const vuelta1 = round0(baseTotal * (0.03 + rnd() * 0.05));
+    const vuelta2 = round0(baseTotal * (0.01 + rnd() * 0.03));
     const reprog = round0(baseTotal * (0.02 + rnd() * 0.05));
     const cancel = round0(baseTotal * (0.01 + rnd() * 0.04));
     // Estancados: son casos aislados y se derivan a Mis Pichos.
     const estancados = 0;
 
     const cancelPct = clamp((cancel / Math.max(1, baseTotal)) * 100, 0, 100);
-    const d1pct = clamp((d1 / Math.max(1, baseTotal)) * 100, 0, 100);
-    const d2pct = clamp((d2 / Math.max(1, baseTotal)) * 100, 0, 100);
+    const vuelta1pct = clamp((vuelta1 / Math.max(1, baseTotal)) * 100, 0, 100);
+    const vuelta2pct = clamp((vuelta2 / Math.max(1, baseTotal)) * 100, 0, 100);
 
     const split = round0(baseTotal * (0.01 + rnd() * 0.04));
     const splitPct = clamp((split / Math.max(1, baseTotal)) * 100, 0, 100);
@@ -472,11 +472,11 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
       total: baseTotal,
       delivered,
       transacciones,
-      sindesp,
-      d1,
-      d1pct,
-      d2,
-      d2pct,
+      demSinDespachar,
+      vuelta1,
+      vuelta1pct,
+      vuelta2,
+      vuelta2pct,
       reprog,
       cancel,
       cancelPct,
@@ -522,7 +522,7 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
       });
     }
 
-    for (let i = 0; i < Math.min(18, sindesp); i++) {
+    for (let i = 0; i < Math.min(18, demSinDespachar); i++) {
       const win = pickDeliveryWindow(rnd);
       const basePrinted = new Date(now.getTime() - (24 + rnd() * 18) * 60 * 60 * 1000);
       const printedAt = dateWithWindow(basePrinted, win, rnd);
@@ -588,8 +588,8 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
     const transacciones = round0(base * (0.6 + rnd() * 0.12));
     const cancel = round0(base * (0.02 + rnd() * 0.02));
     const reprog = round0(base * (0.03 + rnd() * 0.02));
-    const sindesp = round0(base * (0.04 + rnd() * 0.03));
-    return { t, total, transacciones, cancel, reprog, sindesp };
+    const demSinDespachar = round0(base * (0.04 + rnd() * 0.03));
+    return { t, total, transacciones, cancel, reprog, demSinDespachar };
   });
 
   return {

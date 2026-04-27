@@ -14,8 +14,8 @@ function buildKpiSummary(data: OpsDashboardResponse, from: string, to: string) {
   const totalTransactions = data.metricsByPetshop.reduce((s, m) => s + m.transacciones, 0);
   const cancelados = data.metricsByPetshop.reduce((s, m) => s + m.cancel, 0);
   const spliteados = data.metricsByPetshop.reduce((s, m) => s + m.split, 0);
-  const d1 = data.metricsByPetshop.reduce((s, m) => s + m.d1, 0);
-  const d2 = data.metricsByPetshop.reduce((s, m) => s + m.d2, 0);
+  const vuelta1 = data.metricsByPetshop.reduce((s, m) => s + m.vuelta1, 0);
+  const vuelta2 = data.metricsByPetshop.reduce((s, m) => s + m.vuelta2, 0);
   const onTimeN = data.metricsByPetshop.reduce((s, m) => s + m.onTimeN, 0);
   const outTimeN = data.metricsByPetshop.reduce((s, m) => s + m.outTimeN, 0);
   const slBase = onTimeN + outTimeN;
@@ -30,8 +30,8 @@ function buildKpiSummary(data: OpsDashboardResponse, from: string, to: string) {
     },
     sinDespachar: { count: data.sinDespacharRows.length },
     estancados: { count: data.estancadosRows.length },
-    demorado1ra: { count: d1 },
-    demorado2da: { count: d2 },
+    vuelta1: { count: vuelta1 },
+    vuelta2: { count: vuelta2 },
     cancelados: {
       count: cancelados,
       pct: totalOrders > 0 ? (cancelados / totalOrders) * 100 : 0,

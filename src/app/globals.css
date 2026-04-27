@@ -437,6 +437,21 @@ html[data-theme] *{
   padding: 10px 12px;
 }
 
+.kpiMain.kpiBgNeutral{
+  background: var(--surface2);
+  border: 0.5px solid color-mix(in srgb, var(--border) 78%, transparent);
+}
+
+.kpiMain.kpiBgOk{
+  background: color-mix(in srgb, var(--okBg) 85%, var(--surface2));
+  border: 0.5px solid color-mix(in srgb, var(--okBg) 100%, var(--border));
+}
+
+.kpiMain.kpiBgBad{
+  background: color-mix(in srgb, var(--badBg) 85%, var(--surface2));
+  border: 0.5px solid color-mix(in srgb, var(--badBg) 100%, var(--border));
+}
+
 .kpiLabel{
   font-size: 11px;
   font-weight: 500;
@@ -467,22 +482,23 @@ html[data-theme] *{
   flex: 0 0 auto;
 }
 
-.deltaPill{
+.deltaText{
   display:inline-flex;
   align-items:center;
-  gap: 6px;
-  padding: 5px 8px;
-  border-radius: 999px;
-  border: 0.5px solid color-mix(in srgb, currentColor 28%, var(--border));
-  background: color-mix(in srgb, currentColor 10%, transparent);
-  font-size: 10px;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  letter-spacing: .1px;
+  letter-spacing: .15px;
   white-space:nowrap;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.02), 0 0 12px color-mix(in srgb, currentColor 35%, transparent);
 }
 
 .deltaArrow{
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1;
   transform: translateY(-0.5px);
 }
@@ -524,6 +540,21 @@ html[data-theme] *{
   padding: 10px 12px;
   border: 0.5px solid color-mix(in srgb, var(--border) 78%, transparent);
   box-shadow: 0 10px 22px rgba(0,0,0,0.04);
+}
+
+.kpiBgNeutral{
+  background: var(--surface2);
+  border-color: color-mix(in srgb, var(--border) 78%, transparent);
+}
+
+.kpiBgOk{
+  background: color-mix(in srgb, var(--okBg) 85%, var(--surface2));
+  border-color: color-mix(in srgb, var(--okBg) 100%, var(--border));
+}
+
+.kpiBgBad{
+  background: color-mix(in srgb, var(--badBg) 85%, var(--surface2));
+  border-color: color-mix(in srgb, var(--badBg) 100%, var(--border));
 }
 
 .kpiSmallWide{
