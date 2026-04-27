@@ -1,3 +1,14 @@
+/**
+ * `DashboardClient`
+ * Componente principal del dashboard (client-side).
+ *
+ * Acá vive casi toda la UI y la lógica de presentación:
+ * - filtros/estado (petshop + rango de fechas + tema)
+ * - KPIs y comparaciones vs ayer (incluye deltas estables para el mock)
+ * - accesos rápidos (desktop + mobile)
+ * - tablas (copiar/descargar) y visualizaciones (tortas/barras/líneas)
+ * - capacidad logística (cálculos, colores por umbral y modales)
+ */
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -24,6 +35,10 @@ const QUICK_ACCESS: QuickAccessItem[] = [
   { topic: "Capacidad", id: "capacidad", label: "Capacidad logística" },
 ];
 
+/**
+ * Helper de fecha usado por el selector de rango + params de API.
+ * Estandarizamos a yyyy-mm-dd para que el estado/URL sea estable.
+ */
 function ymd(d: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -45,6 +60,10 @@ function formatPct0(n: number) {
   return `${round0(n)}%`;
 }
 
+/**
+ * Umbrales de estado para Service Level (visual / operativo).
+ * Tratamos SL% como un “health metric” con OK / Revisar / Crítico.
+ */
 function badgeClassBySl(slPct: number) {
   if (slPct >= 90) return "pill badgeOk";
   if (slPct >= 85) return "pill badgeWarn";
@@ -67,6 +86,12 @@ function SlProgress({ slPct }: { slPct: number }) {
   );
 }
 
+/**
+ * Doughnut SVG liviano reutilizado en el dashboard.
+ * Importante: el % se calcula como aValue/(aValue+bValue).
+ * Si alguna “mini métrica” debe coincidir con el doughnut, tiene que usar
+ * esa misma relación (ej: On-time = A tiempo / (A tiempo + Fuera de tiempo)).
+ */
 function Doughnut({
   aLabel,
   aValue,
@@ -442,6 +467,10 @@ function downloadTextFile(filename: string, content: string, mime: string) {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * El dashboard usa “vs ayer” en varios lugares.
+ * Mostramos el % redondeado y mantenemos los colores consistentes con ese redondeo.
+ */
 function kpiDeltaText(deltaPct: number) {
   const sign = deltaPct >= 0 ? "+" : "";
   return `${sign}${round0(deltaPct)}% vs ayer`;
@@ -462,6 +491,10 @@ function deltaColorForMetric(deltaPct: number, mode: "higher_better" | "lower_be
   return r < 0 ? "var(--ok)" : "var(--bad)";
 }
 
+/**
+ * Primitiva de UI para “vs ayer”: solo texto + flecha (sin “globito”),
+ * porque la señal principal la da el color de fondo de la tarjeta completa.
+ */
 function DeltaPill({ deltaPct, mode = "higher_better" }: { deltaPct: number; mode?: "higher_better" | "lower_better" }) {
   const r = round0(deltaPct);
   const dir = r > 0 ? "up" : r < 0 ? "down" : "flat";
@@ -484,6 +517,12 @@ function previousFromDelta(current: number, deltaPct: number) {
   return current / denom;
 }
 
+/**
+ * Deltas estables (pseudo-aleatorios).
+ * En modo mock/demo no tenemos “ayer” como serie real, pero necesitamos deltas
+ * determinísticos que NO cambien al togglear el tema ni al re-renderizar.
+ * La key debe incluir petshop/rango/métrica para que sea consistente por vista.
+ */
 function stableDeltaPctFor(key: string) {
   let hash = 0;
   for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) | 0;
@@ -493,6 +532,11 @@ function stableDeltaPctFor(key: string) {
 
 type DeltaBgTone = "ok" | "bad" | "neutral";
 
+/**
+ * Coloreo del fondo de KPIs basado en el “vs ayer”.
+ * Mantenemos una banda neutral (ej: 1%) para que cambios chicos no “griten”
+ * en verde/rojo y queden grises.
+ */
 function deltaBgTone(deltaPct: number, mode: "higher_better" | "lower_better", neutralAbsPct: number) {
   const r = round0(deltaPct);
   if (!Number.isFinite(r) || Math.abs(r) < neutralAbsPct) return "neutral";
@@ -504,6 +548,10 @@ function deltaBgClass(t: DeltaBgTone) {
   return t === "ok" ? "kpiBgOk" : t === "bad" ? "kpiBgBad" : "kpiBgNeutral";
 }
 
+/**
+ * Config por KPI para el fondo basado en delta.
+ * Cada KPI puede tener su propio umbral neutral (comportamiento independiente).
+ */
 const KPI_DELTA_BG = {
   total: { mode: "higher_better" as const, neutralAbsPct: 1 },
   cancel: { mode: "lower_better" as const, neutralAbsPct: 1 },
@@ -511,6 +559,8 @@ const KPI_DELTA_BG = {
   vuelta2: { mode: "lower_better" as const, neutralAbsPct: 1 },
   demSinDespachar: { mode: "lower_better" as const, neutralAbsPct: 1 },
   reprog: { mode: "lower_better" as const, neutralAbsPct: 1 },
+  onTime: { mode: "higher_better" as const, neutralAbsPct: 1 },
+  sl: { mode: "higher_better" as const, neutralAbsPct: 1 },
 };
 
 function WindowPill({ win }: { win?: "10-14" | "14-18" | "18-22" | "14-22" | null }) {
@@ -683,6 +733,19 @@ export default function DashboardClient() {
     const m = data.metricsByPetshop.find((x) => x.petshopId === petshopId);
     return m ?? null;
   }, [data, metricsAll, petshopId]);
+
+  /**
+   * SL (prom.) en la tarjeta superior:
+   * - En vista ALL: mostramos el promedio simple del SL% de todos los petshops
+   *   (mismos valores que se ven en la tabla de SL).
+   * - Con petshop seleccionado: mostramos el SL% propio de ese petshop.
+   */
+  const slPctAvgAll = useMemo(() => {
+    const list = data?.metricsByPetshop ?? [];
+    if (!list.length) return null;
+    const avg = list.reduce((acc, m) => acc + (m.slPct ?? 0), 0) / list.length;
+    return avg;
+  }, [data?.metricsByPetshop]);
 
   const slRows = useMemo(() => {
     if (!data) return [];
@@ -1320,6 +1383,37 @@ export default function DashboardClient() {
             <div className="kpiDetail">
               <span className="kpiDetailLabel">Transacciones</span>
               <span className="mono">{metricsSelected ? metricsSelected.transacciones.toLocaleString("es-AR") : "—"}</span>
+            </div>
+
+            <div className="kpiMiniGrid" aria-label="Indicadores generales">
+              {(() => {
+                // Mismo % que el doughnut "Entregas a tiempo": A tiempo / (A tiempo + Fuera de tiempo)
+                const onTimePct =
+                  metricsSelected != null ? pct(metricsSelected.onTimeN ?? 0, (metricsSelected.onTimeN ?? 0) + (metricsSelected.outTimeN ?? 0)) : null;
+                const dOnTime = stableDeltaPctFor(`${petshopId}|${from}|${to}|onTimePct`);
+                const slPct = petshopId === "ALL" ? slPctAvgAll : metricsSelected?.slPct ?? null;
+                const dSl = stableDeltaPctFor(`${petshopId}|${from}|${to}|${petshopId === "ALL" ? "slPctAvg" : "slPct"}`);
+
+                return (
+                  <>
+                    <div className={`kpiMiniBox ${deltaBgClass(deltaBgTone(dOnTime, KPI_DELTA_BG.onTime.mode, KPI_DELTA_BG.onTime.neutralAbsPct))}`}>
+                      <div className="kpiMiniLabel">On-time</div>
+                      <div className="kpiMiniRow">
+                        <div className="kpiMiniValue mono">{onTimePct != null ? formatPct0(onTimePct) : "—"}</div>
+                        <div className="kpiMiniDelta">{onTimePct != null ? <DeltaPill deltaPct={dOnTime} mode="higher_better" /> : <span className="sub">—</span>}</div>
+                      </div>
+                    </div>
+
+                    <div className={`kpiMiniBox ${deltaBgClass(deltaBgTone(dSl, KPI_DELTA_BG.sl.mode, KPI_DELTA_BG.sl.neutralAbsPct))}`}>
+                      <div className="kpiMiniLabel">{petshopId === "ALL" ? "Service level (prom.)" : "Service level"}</div>
+                      <div className="kpiMiniRow">
+                        <div className="kpiMiniValue mono">{slPct != null ? formatPct0(slPct) : "—"}</div>
+                        <div className="kpiMiniDelta">{slPct != null ? <DeltaPill deltaPct={dSl} mode="higher_better" /> : <span className="sub">—</span>}</div>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
 

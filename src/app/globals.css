@@ -1,4 +1,14 @@
-/* Design tokens (light first) */
+/*
+ * `globals.css`
+ * Estilos globales del dashboard.
+ *
+ * Contiene:
+ * - tokens de diseño (variables CSS) para tema claro/oscuro
+ * - layout responsivo (grids / mobile)
+ * - estilos de tarjetas KPI, deltas “vs ayer”, quick access, y componentes de charts
+ */
+
+/* Tokens de diseño (primero tema claro) */
 :root {
   /* Corporate-ish light theme */
   --bg: #f6f7f9;
@@ -525,6 +535,51 @@ html[data-theme] *{
 }
 
 .kpiDetailLabel{ font-weight: 500; }
+
+.kpiMiniGrid{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.kpiMiniBox{
+  border: 0.5px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+}
+
+.kpiMiniLabel{
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .12px;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kpiMiniValue{
+  margin-top: 4px;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.kpiMiniRow{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.kpiMiniDelta{
+  flex: 0 0 auto;
+  min-width: 0;
+}
 
 .kpiSmallGrid{
   display:grid;
