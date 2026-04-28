@@ -112,6 +112,14 @@ html[data-theme] *{
   align-items:start;
 }
 
+/* Accesos plegados: el dashboard usa todo el ancho */
+.dashboardLayout.qaClosed{
+  grid-template-columns: 1fr;
+}
+.dashboardLayout.qaClosed .quickAccess{
+  display:none;
+}
+
 .dashboardLayout > *{
   min-width: 0;
 }
@@ -137,13 +145,26 @@ html[data-theme] *{
   padding: 12px;
 }
 
+.quickAccessTitleRow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
 .quickAccessTitle{
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: .14px;
   color: var(--muted);
   font-weight: 600;
-  margin-bottom: 8px;
+  margin-bottom: 0;
+}
+
+.quickAccessClose{
+  background: color-mix(in srgb, var(--surface2) 70%, var(--surface));
+  border-color: color-mix(in srgb, var(--border) 75%, transparent);
 }
 
 .quickAccessBlock{
@@ -236,7 +257,9 @@ html[data-theme] *{
 }
 
 .quickAccessMobileBtn{
-  display:none;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
   height: 34px;
   padding: 0 12px;
   border-radius: 999px;

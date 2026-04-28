@@ -1120,6 +1120,8 @@ export default function DashboardClient() {
   const favoritesStorageKey = "opsQuickAccess:favorites:v1";
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [quickAccessOpen, setQuickAccessOpen] = useState(false);
+  const qaDockStorageKey = "opsQuickAccess:dockOpen:v1";
+  const [qaDockOpen, setQaDockOpen] = useState(false);
   const [shortCapacityOpen, setShortCapacityOpen] = useState(false);
   const [flexCapacityOpen, setFlexCapacityOpen] = useState(false);
   const [topbarHidden, setTopbarHidden] = useState(false);
@@ -1142,6 +1144,25 @@ export default function DashboardClient() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(qaDockStorageKey);
+      if (raw === "1") setQaDockOpen(true);
+      if (raw === "0") setQaDockOpen(false);
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(qaDockStorageKey, qaDockOpen ? "1" : "0");
+    } catch {
+      // ignore
+    }
+  }, [qaDockOpen]);
 
   useEffect(() => {
     try {
@@ -1277,8 +1298,14 @@ export default function DashboardClient() {
           </p>
         </div>
         <div className="chipRow">
-          <button type="button" className="btn quickAccessMobileBtn" onClick={() => setQuickAccessOpen(true)}>
-            Accesos
+          <button
+            type="button"
+            className="btn quickAccessMobileBtn"
+            onClick={() => (isMobile ? setQuickAccessOpen(true) : setQaDockOpen((v) => !v))}
+            aria-label={isMobile ? "Abrir accesos" : qaDockOpen ? "Ocultar accesos" : "Mostrar accesos"}
+            title={isMobile ? "Accesos" : qaDockOpen ? "Ocultar accesos" : "Mostrar accesos"}
+          >
+            {isMobile ? "Accesos" : qaDockOpen ? "Accesos ▾" : "Accesos ▸"}
           </button>
           <button
             type="button"
@@ -1302,7 +1329,6 @@ export default function DashboardClient() {
                 </option>
               ))}
             </select>
-            <span className="pill badgeInfo">{viewPillText}</span>
           </label>
           <label className="chip">
             <span>Desde</span>
@@ -1373,10 +1399,15 @@ export default function DashboardClient() {
         </div>
       ) : null}
 
-      <div className="dashboardLayout">
+      <div className={`dashboardLayout ${qaDockOpen ? "" : "qaClosed"}`}>
         <aside className="quickAccess" aria-label="Accesos rápidos">
           <div className="quickAccessCard">
-            <div className="quickAccessTitle">Accesos</div>
+            <div className="quickAccessTitleRow">
+              <div className="quickAccessTitle">Accesos</div>
+              <button type="button" className="btn btnIcon quickAccessClose" onClick={() => setQaDockOpen(false)} aria-label="Cerrar accesos" title="Cerrar">
+                ×
+              </button>
+            </div>
 
             <div className="quickAccessBlock">
               <div className="quickAccessBlockTitle">Mis accesos</div>
