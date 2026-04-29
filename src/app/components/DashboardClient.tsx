@@ -30,16 +30,16 @@ type QuickAccessItem = {
 
 const QUICK_ACCESS: QuickAccessItem[] = [
   { topic: "En vivo", id: "ops-live", label: "KPIs operativos" },
-  { topic: "En vivo", id: "sl-live", label: "Service level (SL)" },
-  { topic: "En vivo", id: "top3", label: "Top 3 petshops" },
-  { topic: "Incidencias", id: "reprogramar", label: "Pedidos a reprogramar" },
-  { topic: "Incidencias", id: "sin-despachar", label: "Demorado sin despachar" },
+  { topic: "Capacidad", id: "capacidad", label: "Capacidad logística" },
   { topic: "Operación", id: "demoras", label: "1ra/2da vuelta" },
-  { topic: "Operación", id: "estancados", label: "Estancados / Cierres manuales" },
+  { topic: "En vivo", id: "top3", label: "Top 3 petshops" },
+  { topic: "En vivo", id: "sl-live", label: "Service level (SL)" },
   { topic: "Riesgo", id: "cancelados", label: "Cancelados" },
   { topic: "Riesgo", id: "spliteados", label: "Pedidos spliteados" },
   { topic: "Post-venta", id: "soluciones", label: "Soluciones / Devoluciones / Retiros" },
-  { topic: "Capacidad", id: "capacidad", label: "Capacidad logística" },
+  { topic: "Operación", id: "estancados", label: "Estancados / Cierres manuales" },
+  { topic: "Incidencias", id: "reprogramar", label: "Pedidos a reprogramar" },
+  { topic: "Incidencias", id: "sin-despachar", label: "Demorado sin despachar" },
 ];
 
 /**
@@ -1518,6 +1518,274 @@ export default function DashboardClient() {
     }
   }, [theme]);
 
+  const CapacidadSection = () => (
+    <section className="section" id="capacidad">
+      <div className="sectionHeader">
+        <div>
+          <h2>Capacidad logística</h2>
+          <p>Límites configurables</p>
+        </div>
+      </div>
+      <div className="twoCol">
+        <div className="miniCard">
+          <div className="miniHeader">
+            <div className="miniTitle">Flex</div>
+            {capacity ? (
+              <div className="utilRight">
+                <div className="utilPct" style={{ color: usageColor(capacity.flex.used / capacity.flex.limit) }}>
+                  {formatPct0(pct(capacity.flex.used, capacity.flex.limit))}
+                </div>
+                <div className="sub mono">
+                  {capacity.flex.used}/{capacity.flex.limit}
+                </div>
+              </div>
+            ) : (
+              <div className="sub">—</div>
+            )}
+          </div>
+          {capacity ? (
+            <>
+              <div className="bar" aria-hidden="true">
+                <div
+                  style={{
+                    width: `${clamp((capacity.flex.used / capacity.flex.limit) * 100, 0, 100)}%`,
+                    background: usageColor(capacity.flex.used / capacity.flex.limit),
+                  }}
+                />
+              </div>
+              <LineMini points={(capacity.flex.daily?.length ? capacity.flex.daily : []).map((x, i) => ({ x: i, y: x.used }))} limit={round0(capacity.flex.limit)} color="var(--capFlex)" />
+              <div className="utilMeta">
+                <span className="utilChip utilChipLimit">
+                  <span className="utilChipSwatch utilChipSwatchLimit" aria-hidden="true" />
+                  <span className="utilChipLabel">Capacidad</span>
+                  <span className="utilChipValue">{round0(capacity.flex.limit)}</span>
+                </span>
+                <span className="utilChip utilChipUsed">
+                  <span className="utilChipSwatch utilChipSwatchUsed" aria-hidden="true" />
+                  <span className="utilChipLabel">Usado</span>
+                  <span className="utilChipValue">{round0(capacity.flex.used)}</span>
+                </span>
+                <span className="utilChip utilChipRemain">
+                  <span className="utilChipSwatch utilChipSwatchRemain" aria-hidden="true" />
+                  <span className="utilChipLabel">Restante</span>
+                  <span className="utilChipValue">{Math.max(0, round0(capacity.flex.limit - capacity.flex.used))}</span>
+                </span>
+              </div>
+            </>
+          ) : null}
+        </div>
+
+        <div className="miniCard">
+          <div className="miniHeader">
+            <div className="miniTitle">Franja corta</div>
+            {capacity ? (
+              <div className="utilRight">
+                <div className="utilPct" style={{ color: usageColor(capacity.franja.used / capacity.franja.limit) }}>
+                  {formatPct0(pct(capacity.franja.used, capacity.franja.limit))}
+                </div>
+                <div className="sub mono">
+                  {capacity.franja.used}/{capacity.franja.limit}
+                </div>
+              </div>
+            ) : (
+              <div className="sub">—</div>
+            )}
+          </div>
+          {capacity ? (
+            <>
+              <div className="bar" aria-hidden="true">
+                <div
+                  style={{
+                    width: `${clamp((capacity.franja.used / capacity.franja.limit) * 100, 0, 100)}%`,
+                    background: usageColor(capacity.franja.used / capacity.franja.limit),
+                  }}
+                />
+              </div>
+              <LineMini points={(capacity.franja.daily?.length ? capacity.franja.daily : []).map((x, i) => ({ x: i, y: x.used }))} limit={round0(capacity.franja.limit)} color="var(--cap1418)" />
+              <div className="utilMeta">
+                <span className="utilChip utilChipLimit">
+                  <span className="utilChipSwatch utilChipSwatchLimit" aria-hidden="true" />
+                  <span className="utilChipLabel">Capacidad</span>
+                  <span className="utilChipValue">{round0(capacity.franja.limit)}</span>
+                </span>
+                <span className="utilChip utilChipUsed">
+                  <span className="utilChipSwatch utilChipSwatchUsed" aria-hidden="true" />
+                  <span className="utilChipLabel">Usado</span>
+                  <span className="utilChipValue">{round0(capacity.franja.used)}</span>
+                </span>
+                <span className="utilChip utilChipRemain">
+                  <span className="utilChipSwatch utilChipSwatchRemain" aria-hidden="true" />
+                  <span className="utilChipLabel">Restante</span>
+                  <span className="utilChipValue">{Math.max(0, round0(capacity.franja.limit - capacity.franja.used))}</span>
+                </span>
+              </div>
+            </>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="twoCol">
+        <div className="miniCard">
+          <div className="miniHeader">
+            <div className="capHeaderGrid">
+              <div className="capHeaderLeft">
+                <div className="miniTitle">Flex (14–22) por petshop</div>
+                <div className="sub">% de uso por petshop (usado / capacidad)</div>
+              </div>
+              <div className="capDayStepper" aria-label="Selector de día">
+                <button
+                  type="button"
+                  className="btn btnIcon"
+                  onClick={() => setCapDayOffset((d) => Math.max(0, d - 1))}
+                  disabled={capDayOffset <= 0}
+                  aria-label="Día anterior"
+                  title="Anterior"
+                >
+                  ←
+                </button>
+                <div className="capDayLabel" title={capDayLabel}>
+                  <div className="capDayTop mono">{capDayOffset === 0 ? "Hoy" : capDayOffset === 1 ? "Mañana" : `+${capDayOffset}d`}</div>
+                  <div className="capDayBottom mono">{capDayLabel.split(" · ")[1] ?? capDayLabel}</div>
+                </div>
+                <button
+                  type="button"
+                  className="btn btnIcon"
+                  onClick={() => setCapDayOffset((d) => Math.min(5, d + 1))}
+                  disabled={capDayOffset >= 5}
+                  aria-label="Día siguiente"
+                  title="Siguiente"
+                >
+                  →
+                </button>
+              </div>
+            </div>
+          </div>
+          {flexCapacityPctRows.length ? (
+            <>
+              <button type="button" className="chartButton" onClick={() => setFlexCapacityOpen(true)} aria-label="Ver usado vs capacidad Flex por petshop">
+                <div className="flexUtilHeader">
+                  <span className="shortUtilHLabel">Petshop</span>
+                  <span className="shortUtilHWin" style={{ color: "var(--capFlex)" }}>
+                    14–22
+                  </span>
+                </div>
+                <div className="flexUtilList">
+                  {flexCapacityPctRows.map((r) => (
+                    <div key={r.id} className="flexUtilRow">
+                      <div className="shortUtilLabel truncate" title={r.label}>
+                        {r.label}
+                      </div>
+                      <div className="shortUtilCell">
+                        {r.flexEnabled ? (
+                          <div className={`shortUtilBar ${nearCapacityPctClass(r.pct0)}`} style={{ ["--c" as never]: "var(--ok)", ["--p" as never]: `${clamp(r.pct0, 0, 100)}%` }}>
+                            {r.pct0}%
+                          </div>
+                        ) : (
+                          <div className="shortUtilBar" style={{ ["--c" as never]: "var(--ok)", ["--p" as never]: `0%` }}>
+                            OFF
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </button>
+              <button type="button" className="capHint capHintBtn" onClick={() => setFlexCapacityOpen(true)}>
+                Presioná para ver cantidades exactas
+              </button>
+            </>
+          ) : (
+            <div className="sub">—</div>
+          )}
+        </div>
+
+        <div className="miniCard">
+          <div className="miniHeader">
+            <div className="capHeaderGrid">
+              <div className="capHeaderLeft">
+                <div className="miniTitle">Franja corta por petshop</div>
+                <div className="sub">% de uso por franja (usado / cap.)</div>
+              </div>
+              <div className="capDayStepper" aria-label="Selector de día">
+                <button
+                  type="button"
+                  className="btn btnIcon"
+                  onClick={() => setCapDayOffset((d) => Math.max(0, d - 1))}
+                  disabled={capDayOffset <= 0}
+                  aria-label="Día anterior"
+                  title="Anterior"
+                >
+                  ←
+                </button>
+                <div className="capDayLabel" title={capDayLabel}>
+                  <div className="capDayTop mono">{capDayOffset === 0 ? "Hoy" : capDayOffset === 1 ? "Mañana" : `+${capDayOffset}d`}</div>
+                  <div className="capDayBottom mono">{capDayLabel.split(" · ")[1] ?? capDayLabel}</div>
+                </div>
+                <button
+                  type="button"
+                  className="btn btnIcon"
+                  onClick={() => setCapDayOffset((d) => Math.min(5, d + 1))}
+                  disabled={capDayOffset >= 5}
+                  aria-label="Día siguiente"
+                  title="Siguiente"
+                >
+                  →
+                </button>
+              </div>
+            </div>
+          </div>
+          {shortCapacityPctRows.length ? (
+            <>
+              <button type="button" className="chartButton" onClick={() => setShortCapacityOpen(true)} aria-label="Ver usado vs capacidad franja corta por petshop">
+                <div className="shortUtilHeader">
+                  <span className="shortUtilHLabel">Petshop</span>
+                  <span className="shortUtilHWin" style={{ color: "var(--cap1014)" }}>
+                    10–14
+                  </span>
+                  <span className="shortUtilHWin" style={{ color: "var(--cap1418)" }}>
+                    14–18
+                  </span>
+                  <span className="shortUtilHWin" style={{ color: "var(--cap1822)" }}>
+                    18–22
+                  </span>
+                </div>
+                <div className="shortUtilList">
+                  {shortCapacityPctRows.map((r) => (
+                    <div key={r.id} className="shortUtilRow">
+                      <div className="shortUtilLabel truncate" title={r.label}>
+                        {r.label}
+                      </div>
+                      <div className="shortUtilCell">
+                        <div className={`shortUtilBar ${nearCapacityPctClass(r.p1014)}`} style={{ ["--c" as never]: "var(--ok)", ["--p" as never]: `${clamp(r.p1014, 0, 100)}%` }}>
+                          {r.shortEnabled["10-14"] ? `${r.p1014}%` : "OFF"}
+                        </div>
+                      </div>
+                      <div className="shortUtilCell">
+                        <div className={`shortUtilBar ${nearCapacityPctClass(r.p1418)}`} style={{ ["--c" as never]: "var(--ok)", ["--p" as never]: `${clamp(r.p1418, 0, 100)}%` }}>
+                          {r.shortEnabled["14-18"] ? `${r.p1418}%` : "OFF"}
+                        </div>
+                      </div>
+                      <div className="shortUtilCell">
+                        <div className={`shortUtilBar ${nearCapacityPctClass(r.p1822)}`} style={{ ["--c" as never]: "var(--ok)", ["--p" as never]: `${clamp(r.p1822, 0, 100)}%` }}>
+                          {r.shortEnabled["18-22"] ? `${r.p1822}%` : "OFF"}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </button>
+              <button type="button" className="capHint capHintBtn" onClick={() => setShortCapacityOpen(true)}>
+                Presioná para ver cantidades exactas
+              </button>
+            </>
+          ) : (
+            <div className="sub">—</div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+
   return (
     <main className="container">
       {dateRangeOpen ? (
@@ -2145,6 +2413,91 @@ export default function DashboardClient() {
         </div>
           </section>
 
+          <CapacidadSection />
+
+          <section className="section" id="demoras">
+            <div className="sectionHeader">
+              <div>
+                <h2>1ra vuelta y 2da vuelta</h2>
+                <p>Porcentaje por petshop</p>
+              </div>
+            </div>
+            <div className="twoCol">
+              <div className="miniCard">
+                <div className="miniHeader">
+                  <div className="miniTitle">1ra vuelta</div>
+                </div>
+                <BarList items={vuelta1Bars} color="var(--warn)" />
+              </div>
+              <div className="miniCard">
+                <div className="miniHeader">
+                  <div className="miniTitle">2da vuelta</div>
+                </div>
+                <BarList items={vuelta2Bars} color="color-mix(in srgb, var(--bad) 75%, transparent)" />
+              </div>
+            </div>
+          </section>
+
+          <section className="section" id="top3">
+            <div className="sectionHeader">
+              <div>
+                <h2>Top 3 petshops del día</h2>
+                <p>Share de pedidos</p>
+              </div>
+            </div>
+            <div className="twoCol">
+              <div className="miniCard">
+                <div className="miniHeader">
+                  <div className="miniTitle">Top 3</div>
+                </div>
+                <div className="top3">
+                  {top3.map((t0, i) => (
+                    <div key={t0.petshopId} className="top3Item">
+                      <div className="rankCircle" data-rank={i + 1}>
+                        {i + 1}
+                      </div>
+                      {isMobile ? (
+                        <div className="top3Main">
+                          <div className="top3Name">{t0.petshopName}</div>
+                          <div className="bar" aria-hidden="true">
+                            <div style={{ width: `${clamp(t0.pct, 0, 100)}%`, background: "var(--info)" }} />
+                          </div>
+                          <div className="top3MetaRow">
+                            <div className="mono">{formatPct0(t0.pct)}</div>
+                            <div className="mono">{t0.orders.toLocaleString("es-AR")} pedidos</div>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="top3Main">
+                            <div className="top3NameRow">
+                              <div className="top3Name">{t0.petshopName}</div>
+                              <div className="top3Share mono">{formatPct0(t0.pct)}</div>
+                            </div>
+                            <div className="bar" aria-hidden="true">
+                              <div style={{ width: `${clamp(t0.pct, 0, 100)}%`, background: "var(--info)" }} />
+                            </div>
+                          </div>
+                          <div className="top3Right">
+                            <div className="mono">{t0.orders.toLocaleString("es-AR")}</div>
+                            <div className="sub mono">pedidos</div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="miniCard">
+                <div className="miniHeader">
+                  <div className="miniTitle">Share (todos)</div>
+                </div>
+                <PieAllPetshops title="Share de pedidos por petshop" items={petshopShareAll} />
+              </div>
+            </div>
+          </section>
+
       <section className="section" id="sl-live">
         <div className="sectionHeader">
           <div>
@@ -2236,580 +2589,6 @@ export default function DashboardClient() {
               </tbody>
             </table>
           )}
-        </div>
-      </section>
-
-      <section className="section" id="top3">
-        <div className="sectionHeader">
-          <div>
-            <h2>Top 3 petshops del día</h2>
-            <p>Share de pedidos</p>
-          </div>
-        </div>
-        <div className="twoCol">
-          <div className="miniCard">
-            <div className="miniHeader">
-              <div className="miniTitle">Top 3</div>
-            </div>
-            <div className="top3">
-              {top3.map((t0, i) => (
-                <div key={t0.petshopId} className="top3Item">
-                  <div className="rankCircle" data-rank={i + 1}>
-                    {i + 1}
-                  </div>
-                  {isMobile ? (
-                    <div className="top3Main">
-                      <div className="top3Name">{t0.petshopName}</div>
-                      <div className="bar" aria-hidden="true">
-                        <div style={{ width: `${clamp(t0.pct, 0, 100)}%`, background: "var(--info)" }} />
-                      </div>
-                      <div className="top3MetaRow">
-                        <div className="mono">{formatPct0(t0.pct)}</div>
-                        <div className="mono">{t0.orders.toLocaleString("es-AR")} pedidos</div>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="top3Main">
-                        <div className="top3NameRow">
-                          <div className="top3Name">{t0.petshopName}</div>
-                          <div className="top3Share mono">{formatPct0(t0.pct)}</div>
-                        </div>
-                        <div className="bar" aria-hidden="true">
-                          <div style={{ width: `${clamp(t0.pct, 0, 100)}%`, background: "var(--info)" }} />
-                        </div>
-                      </div>
-                      <div className="top3Right">
-                        <div className="mono">{t0.orders.toLocaleString("es-AR")}</div>
-                        <div className="sub mono">pedidos</div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="miniCard">
-            <div className="miniHeader">
-              <div className="miniTitle">Share (todos)</div>
-            </div>
-            <PieAllPetshops title="Share de pedidos por petshop" items={petshopShareAll} />
-          </div>
-        </div>
-      </section>
-
-      <section className="section" id="reprogramar">
-        <div className="sectionToolbar sectionToolbarTop">
-          <div className="sectionToolbarTitle">
-            <h2>Pedidos a reprogramar</h2>
-            <p>Superaron 48hs sin gestión</p>
-          </div>
-          <div className="sectionActions">
-            <button type="button" className="recordsHint recordsHintInline" onClick={() => setRecordsModal("reprogramar")}>
-              Presioná registros (más info)
-            </button>
-            <div className="pager">
-              <button
-                className="btn btnIcon"
-                type="button"
-                onClick={() => setReprogramarPage((p) => Math.max(0, p - 1))}
-                disabled={reprogramarPage <= 0}
-                aria-label="Página anterior"
-                title="Anterior"
-              >
-                ←
-              </button>
-              <span className="sub mono">
-                {reprogramarRowsSorted.length} · {reprogramarPage + 1}/{reprogramarPages}
-              </span>
-              <button
-                className="btn btnIcon"
-                type="button"
-                onClick={() => setReprogramarPage((p) => Math.min(reprogramarPages - 1, p + 1))}
-                disabled={reprogramarPage >= reprogramarPages - 1}
-                aria-label="Página siguiente"
-                title="Siguiente"
-              >
-                →
-              </button>
-            </div>
-            <CopyActionButton
-              label="Wpp"
-              className="btnPanelAction"
-              onCopy={async () => {
-                const headers = ["#pedido", "fecha", "franja"];
-                const rows = reprogramarRows.map((r) => [
-                  r.orderId,
-                  new Date(r.createdAt).toLocaleDateString("es-AR"),
-                  r.deliveryWindow ?? "",
-                ]);
-                await navigator.clipboard.writeText(toFixedWidthTable(headers, rows, { maxColWidths: [9, 10, 7], wrapInCodeBlock: false }));
-              }}
-            />
-            <CopyActionButton
-              label="Mail"
-              className="btnPanelAction"
-              onCopy={async () => {
-                const headers = ["#pedido", "fecha y hora", "franja", "cliente", "domicilio", "producto", "petshop"];
-                const rows = reprogramarRows.map((r) => [
-                  r.orderId,
-                  new Date(r.createdAt).toLocaleString("es-AR"),
-                  r.deliveryWindow ?? "",
-                  r.customer,
-                  r.address,
-                  r.product,
-                  r.petshopName ?? "",
-                ]);
-                const text = toFixedWidthTable(headers, rows, { maxColWidths: [9, 19, 7, 18, 22, 26, 16], wrapInCodeBlock: true });
-                const html = toHtmlTable(headers, rows);
-                // Prefer HTML for mail clients; keep text fallback.
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const ClipboardItemCtor: any = (window as any).ClipboardItem;
-                if (ClipboardItemCtor && navigator.clipboard?.write) {
-                  await navigator.clipboard.write([new ClipboardItemCtor({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]);
-                } else {
-                  await navigator.clipboard.writeText(text);
-                }
-              }}
-            />
-            <button
-              className="btn btnPanelAction"
-              type="button"
-              onClick={() => {
-                const headers = ["pedido", "fecha_y_hora", "franja", "cliente", "domicilio", "producto", "petshop"];
-                const rows = reprogramarRows.map((r) => [
-                  r.orderId,
-                  new Date(r.createdAt).toLocaleString("es-AR"),
-                  r.deliveryWindow ?? "",
-                  r.customer,
-                  r.address,
-                  r.product,
-                  r.petshopName ?? "",
-                ]);
-                downloadTextFile(`pedidos_a_reprogramar_${from}_${to}.csv`, toCsv(headers, rows, ";"), "text/csv;charset=utf-8");
-              }}
-            >
-              Descargar Excel
-            </button>
-          </div>
-        </div>
-        <div
-          className="tableScroll"
-          role="button"
-          tabIndex={0}
-          aria-label="Abrir modal con todos los pedidos a reprogramar"
-          onClick={() => setRecordsModal("reprogramar")}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") setRecordsModal("reprogramar");
-          }}
-        >
-          <table className="tableFixed">
-            <colgroup>
-              <col style={{ width: "92px" }} />
-              <col style={{ width: "160px" }} />
-              <col style={{ width: "64px" }} />
-              <col style={{ width: "160px" }} />
-              <col style={{ width: "260px" }} />
-              <col style={{ width: "320px" }} />
-              <col style={{ width: "160px" }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th>#pedido</th>
-                <th>Fecha y hora</th>
-                <th>Franja</th>
-                <th>Cliente</th>
-                <th>Domicilio</th>
-                <th>Producto</th>
-                <th>Petshop</th>
-              </tr>
-            </thead>
-            <tbody>
-              {reprogramarRowsView.map((r) => (
-                <tr key={`${r.orderId}-${r.createdAt}`} data-ps={r.petshopId ?? ""}>
-                  <td className="mono">{r.orderId}</td>
-                  <td>{new Date(r.createdAt).toLocaleString("es-AR")}</td>
-                  <td className="franjaCell">
-                    <WindowPill win={r.deliveryWindow ?? null} />
-                  </td>
-                  <td className="truncate">{r.customer}</td>
-                  <td className="truncate">{r.address}</td>
-                  <td className="truncate">{r.product}</td>
-                  <td className="truncate">{r.petshopName ?? "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="section" id="sin-despachar">
-        <div className="sectionToolbar sectionToolbarTop">
-          <div className="sectionToolbarTitle">
-            <h2>Demorado sin despachar</h2>
-            <p>Etiqueta impresa &gt;24hs sin driver</p>
-          </div>
-          <div className="sectionActions">
-            <button type="button" className="recordsHint recordsHintInline" onClick={() => setRecordsModal("sinDespachar")}>
-              Presioná registros (más info)
-            </button>
-            <div className="pager">
-              <button
-                className="btn btnIcon"
-                type="button"
-                onClick={() => setSinDespacharPage((p) => Math.max(0, p - 1))}
-                disabled={sinDespacharPage <= 0}
-                aria-label="Página anterior"
-                title="Anterior"
-              >
-                ←
-              </button>
-              <span className="sub mono">
-                {sinDespacharRowsSorted.length} · {sinDespacharPage + 1}/{sinDespacharPages}
-              </span>
-              <button
-                className="btn btnIcon"
-                type="button"
-                onClick={() => setSinDespacharPage((p) => Math.min(sinDespacharPages - 1, p + 1))}
-                disabled={sinDespacharPage >= sinDespacharPages - 1}
-                aria-label="Página siguiente"
-                title="Siguiente"
-              >
-                →
-              </button>
-            </div>
-            <CopyActionButton
-              label="Wpp"
-              className="btnPanelAction"
-              onCopy={async () => {
-                const headers = ["#pedido", "fecha", "franja"];
-                const rows = sinDespacharRows.map((r) => [
-                  r.orderId,
-                  new Date(r.labelPrintedAt).toLocaleDateString("es-AR"),
-                  r.deliveryWindow ?? "",
-                ]);
-                await navigator.clipboard.writeText(toFixedWidthTable(headers, rows, { maxColWidths: [9, 10, 7], wrapInCodeBlock: false }));
-              }}
-            />
-            <CopyActionButton
-              label="Mail"
-              className="btnPanelAction"
-              onCopy={async () => {
-                const headers = ["#pedido", "etiqueta impresa", "franja", "cliente", "domicilio", "producto", "petshop", "horas espera"];
-                const rows = sinDespacharRows.map((r) => [
-                  r.orderId,
-                  new Date(r.labelPrintedAt).toLocaleString("es-AR"),
-                  r.deliveryWindow ?? "",
-                  r.customer,
-                  r.address,
-                  r.product,
-                  r.petshopName ?? "",
-                  `${round0(r.waitHours)}h`,
-                ]);
-                const text = toFixedWidthTable(headers, rows, { maxColWidths: [9, 19, 7, 18, 22, 26, 16, 11], wrapInCodeBlock: true });
-                const html = toHtmlTable(headers, rows);
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const ClipboardItemCtor: any = (window as any).ClipboardItem;
-                if (ClipboardItemCtor && navigator.clipboard?.write) {
-                  await navigator.clipboard.write([new ClipboardItemCtor({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]);
-                } else {
-                  await navigator.clipboard.writeText(text);
-                }
-              }}
-            />
-            <button
-              className="btn btnPanelAction"
-              type="button"
-              onClick={() => {
-                const headers = ["pedido", "etiqueta_impresa", "franja", "cliente", "domicilio", "producto", "petshop", "horas_espera"];
-                const rows = sinDespacharRows.map((r) => [
-                  r.orderId,
-                  new Date(r.labelPrintedAt).toLocaleString("es-AR"),
-                  r.deliveryWindow ?? "",
-                  r.customer,
-                  r.address,
-                  r.product,
-                  r.petshopName ?? "",
-                  String(round0(r.waitHours)),
-                ]);
-                downloadTextFile(`demorado_sin_despachar_${from}_${to}.csv`, toCsv(headers, rows, ";"), "text/csv;charset=utf-8");
-              }}
-            >
-              Descargar Excel
-            </button>
-          </div>
-        </div>
-        <div
-          className="tableScroll"
-          role="button"
-          tabIndex={0}
-          aria-label="Abrir modal con todos los demorados sin despachar"
-          onClick={() => setRecordsModal("sinDespachar")}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") setRecordsModal("sinDespachar");
-          }}
-        >
-          <table className="tableFixed">
-            <colgroup>
-              <col style={{ width: "92px" }} />
-              <col style={{ width: "160px" }} />
-              <col style={{ width: "64px" }} />
-              <col style={{ width: "160px" }} />
-              <col style={{ width: "280px" }} />
-              <col style={{ width: "340px" }} />
-              <col style={{ width: "120px" }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th>#pedido</th>
-                <th>Etiqueta impresa</th>
-                <th>Franja</th>
-                <th>Cliente</th>
-                <th>Domicilio</th>
-                <th>Producto</th>
-                <th>Horas de espera</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sinDespacharRowsView.map((r: SinDespacharRow) => {
-                const color = r.waitHours > 28 ? "var(--bad)" : r.waitHours >= 24 ? "var(--warn)" : "var(--muted)";
-                return (
-                  <tr key={`${r.orderId}-${r.labelPrintedAt}`}>
-                    <td className="mono">{r.orderId}</td>
-                    <td>{new Date(r.labelPrintedAt).toLocaleString("es-AR")}</td>
-                    <td className="franjaCell">
-                      <WindowPill win={r.deliveryWindow ?? null} />
-                    </td>
-                    <td className="truncate">{r.customer}</td>
-                    <td className="truncate">{r.address}</td>
-                    <td className="truncate">{r.product}</td>
-                    <td style={{ color, fontWeight: 500 }}>{round0(r.waitHours)}h</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="section" id="demoras">
-        <div className="sectionHeader">
-          <div>
-            <h2>1ra vuelta y 2da vuelta</h2>
-            <p>Porcentaje por petshop</p>
-          </div>
-        </div>
-        <div className="twoCol">
-          <div className="miniCard">
-            <div className="miniHeader">
-              <div className="miniTitle">1ra vuelta</div>
-            </div>
-            <BarList items={vuelta1Bars} color="var(--warn)" />
-          </div>
-          <div className="miniCard">
-            <div className="miniHeader">
-              <div className="miniTitle">2da vuelta</div>
-            </div>
-            <BarList items={vuelta2Bars} color="color-mix(in srgb, var(--bad) 75%, transparent)" />
-          </div>
-        </div>
-      </section>
-
-      <section className="section" id="estancados">
-        <div className="sectionHeader">
-          <div>
-            <h2>Estancados y Cerrados manualmente</h2>
-            <p>Casos aislados + cierres manuales</p>
-          </div>
-        </div>
-        <div className="twoCol">
-          <div className="miniCard">
-            <div className="miniHeader">
-              <div className="miniTitle">Estancados</div>
-            </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>#pedido</th>
-                  <th>Fecha</th>
-                  <th>Cliente</th>
-                  <th>Petshop</th>
-                  <th>Horas de espera</th>
-                </tr>
-              </thead>
-              <tbody>
-                {estancadosRowsView.map((r) => {
-                  const color = r.waitHours > 30 ? "var(--bad)" : r.waitHours >= 20 ? "var(--warn)" : "var(--muted)";
-                  return (
-                    <tr key={`${r.orderId}-${r.createdAt}`}>
-                      <td className="mono">{r.orderId}</td>
-                      <td>{new Date(r.createdAt).toLocaleString("es-AR")}</td>
-                      <td>{r.customer}</td>
-                      <td>{r.petshopName ?? "—"}</td>
-                      <td style={{ color, fontWeight: 500 }}>{round0(r.waitHours)}h</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <div className="miniCard">
-            <div className="miniHeader">
-              <div className="miniTitle">Pedidos cerrados manualmente</div>
-              <div className="sub">Últimos 7 días</div>
-            </div>
-            <VerticalBars items={manualCloseBars} color="var(--purple)" />
-          </div>
-        </div>
-
-        <div className="sectionToolbar" style={{ marginTop: 10 }}>
-          <div className="sectionActions">
-            <button type="button" className="recordsHint recordsHintInline" onClick={() => setRecordsModal("cerradosManual")}>
-              Presioná registros
-            </button>
-            <div className="pager">
-              <button
-                className="btn btnIcon"
-                type="button"
-                onClick={() => setCerradosManualPage((p) => Math.max(0, p - 1))}
-                disabled={cerradosManualPage <= 0}
-                aria-label="Página anterior"
-                title="Anterior"
-              >
-                ←
-              </button>
-              <span className="sub mono">
-                {cerradosManualmenteRowsSorted.length} · {cerradosManualPage + 1}/{cerradosManualPages}
-              </span>
-              <button
-                className="btn btnIcon"
-                type="button"
-                onClick={() => setCerradosManualPage((p) => Math.min(cerradosManualPages - 1, p + 1))}
-                disabled={cerradosManualPage >= cerradosManualPages - 1}
-                aria-label="Página siguiente"
-                title="Siguiente"
-              >
-                →
-              </button>
-            </div>
-            <CopyActionButton
-              label="Wpp"
-              className="btnPanelAction"
-              onCopy={async () => {
-                const headers = ["#pedido", "fecha", "franja"];
-                const rows = cerradosManualmenteRowsSorted.map((r) => [
-                  r.orderId,
-                  new Date(r.closedAt).toLocaleDateString("es-AR"),
-                  r.deliveryWindow ?? "",
-                ]);
-                await navigator.clipboard.writeText(toFixedWidthTable(headers, rows, { maxColWidths: [9, 10, 7], wrapInCodeBlock: false }));
-              }}
-            />
-            <CopyActionButton
-              label="Mail"
-              className="btnPanelAction"
-              onCopy={async () => {
-                const headers = ["#pedido", "cerrado", "franja", "cliente", "domicilio", "producto", "petshop", "nota"];
-                const rows = cerradosManualmenteRowsSorted.map((r) => [
-                  r.orderId,
-                  new Date(r.closedAt).toLocaleString("es-AR"),
-                  r.deliveryWindow ?? "",
-                  r.customer,
-                  r.address,
-                  r.product,
-                  r.petshopName ?? "",
-                  r.note,
-                ]);
-                const text = toFixedWidthTable(headers, rows, { maxColWidths: [9, 19, 7, 18, 22, 26, 16, 18], wrapInCodeBlock: true });
-                const html = toHtmlTable(headers, rows);
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const ClipboardItemCtor: any = (window as any).ClipboardItem;
-                if (ClipboardItemCtor && navigator.clipboard?.write) {
-                  await navigator.clipboard.write([
-                    new ClipboardItemCtor({
-                      "text/html": new Blob([html], { type: "text/html" }),
-                      "text/plain": new Blob([text], { type: "text/plain" }),
-                    }),
-                  ]);
-                } else {
-                  await navigator.clipboard.writeText(text);
-                }
-              }}
-            />
-            <button
-              className="btn btnPanelAction"
-              type="button"
-              onClick={() => {
-                const headers = ["pedido", "cerrado", "franja", "cliente", "domicilio", "producto", "petshop", "nota"];
-                const rows = cerradosManualmenteRowsSorted.map((r) => [
-                  r.orderId,
-                  new Date(r.closedAt).toLocaleString("es-AR"),
-                  r.deliveryWindow ?? "",
-                  r.customer,
-                  r.address,
-                  r.product,
-                  r.petshopName ?? "",
-                  r.note,
-                ]);
-                downloadTextFile(`cerrados_manualmente_${from}_${to}.csv`, toCsv(headers, rows, ";"), "text/csv;charset=utf-8");
-              }}
-            >
-              Descargar Excel
-            </button>
-          </div>
-        </div>
-
-        <div
-          className="tableScroll"
-          role="button"
-          tabIndex={0}
-          aria-label="Abrir modal con todos los cerrados manualmente"
-          onClick={() => setRecordsModal("cerradosManual")}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") setRecordsModal("cerradosManual");
-          }}
-        >
-          <table className="tableFixed">
-            <colgroup>
-              <col style={{ width: "92px" }} />
-              <col style={{ width: "160px" }} />
-              <col style={{ width: "64px" }} />
-              <col style={{ width: "160px" }} />
-              <col style={{ width: "280px" }} />
-              <col style={{ width: "340px" }} />
-              <col style={{ width: "160px" }} />
-              <col style={{ width: "220px" }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th>#pedido</th>
-                <th>Cerrado</th>
-                <th>Franja</th>
-                <th>Cliente</th>
-                <th>Domicilio</th>
-                <th>Producto</th>
-                <th>Petshop</th>
-                <th>Nota</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cerradosManualmenteRowsView.map((r: CerradoManualRow) => (
-                <tr key={`${r.orderId}-${r.closedAt}`}>
-                  <td className="mono">{r.orderId}</td>
-                  <td>{new Date(r.closedAt).toLocaleString("es-AR")}</td>
-                  <td className="franjaCell">
-                    <WindowPill win={r.deliveryWindow ?? null} />
-                  </td>
-                  <td className="truncate">{r.customer}</td>
-                  <td className="truncate">{r.address}</td>
-                  <td className="truncate">{r.product}</td>
-                  <td className="truncate">{r.petshopName ?? "—"}</td>
-                  <td className="truncate">{r.note}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </section>
 
@@ -3050,9 +2829,7 @@ export default function DashboardClient() {
             <div className="kpi">
               <div>
                 <div className="value mono">{splitSummary ? splitSummary.split.toLocaleString("es-AR") : "—"}</div>
-                <div className="sub">
-                  {splitSummary ? `sobre ${splitSummary.total.toLocaleString("es-AR")} transacciones` : "—"}
-                </div>
+                <div className="sub">{splitSummary ? `sobre ${splitSummary.total.toLocaleString("es-AR")} transacciones` : "—"}</div>
               </div>
             </div>
             {splitSummary ? (
@@ -3118,556 +2895,775 @@ export default function DashboardClient() {
         />
       </section>
 
-      <section className="section" id="capacidad">
+      <section className="section" id="estancados">
         <div className="sectionHeader">
           <div>
-            <h2>Capacidad logística</h2>
-            <p>Límites configurables</p>
+            <h2>Estancados y Cerrados manualmente</h2>
+            <p>Casos aislados + cierres manuales</p>
           </div>
         </div>
         <div className="twoCol">
           <div className="miniCard">
             <div className="miniHeader">
-              <div className="miniTitle">Flex</div>
-              {capacity ? (
-                <div className="utilRight">
-                  <div className="utilPct" style={{ color: usageColor(capacity.flex.used / capacity.flex.limit) }}>
-                    {formatPct0(pct(capacity.flex.used, capacity.flex.limit))}
-                  </div>
-                  <div className="sub mono">
-                    {capacity.flex.used}/{capacity.flex.limit}
-                  </div>
-                </div>
-              ) : (
-                <div className="sub">—</div>
-              )}
+              <div className="miniTitle">Estancados</div>
             </div>
-            {capacity ? (
-              <>
-                <div className="bar" aria-hidden="true">
-                  <div
-                    style={{
-                      width: `${clamp((capacity.flex.used / capacity.flex.limit) * 100, 0, 100)}%`,
-                      background: usageColor(capacity.flex.used / capacity.flex.limit),
-                    }}
-                  />
-                </div>
-                <LineMini
-                  points={(capacity.flex.daily?.length ? capacity.flex.daily : []).map((x, i) => ({ x: i, y: x.used }))}
-                  limit={round0(capacity.flex.limit)}
-                  color="var(--capFlex)"
-                />
-                <div className="utilMeta">
-                  <span className="utilChip utilChipLimit">
-                    <span className="utilChipSwatch utilChipSwatchLimit" aria-hidden="true" />
-                    <span className="utilChipLabel">Capacidad</span>
-                    <span className="utilChipValue">{round0(capacity.flex.limit)}</span>
-                  </span>
-                  <span className="utilChip utilChipUsed">
-                    <span className="utilChipSwatch utilChipSwatchUsed" aria-hidden="true" />
-                    <span className="utilChipLabel">Usado</span>
-                    <span className="utilChipValue">{round0(capacity.flex.used)}</span>
-                  </span>
-                  <span className="utilChip utilChipRemain">
-                    <span className="utilChipSwatch utilChipSwatchRemain" aria-hidden="true" />
-                    <span className="utilChipLabel">Restante</span>
-                    <span className="utilChipValue">{Math.max(0, round0(capacity.flex.limit - capacity.flex.used))}</span>
-                  </span>
-                </div>
-              </>
-            ) : null}
+            <table>
+              <thead>
+                <tr>
+                  <th>#pedido</th>
+                  <th>Fecha</th>
+                  <th>Cliente</th>
+                  <th>Petshop</th>
+                  <th>Horas de espera</th>
+                </tr>
+              </thead>
+              <tbody>
+                {estancadosRowsView.map((r) => {
+                  const color = r.waitHours > 30 ? "var(--bad)" : r.waitHours >= 20 ? "var(--warn)" : "var(--muted)";
+                  return (
+                    <tr key={`${r.orderId}-${r.createdAt}`}>
+                      <td className="mono">{r.orderId}</td>
+                      <td>{new Date(r.createdAt).toLocaleString("es-AR")}</td>
+                      <td>{r.customer}</td>
+                      <td>{r.petshopName ?? "—"}</td>
+                      <td style={{ color, fontWeight: 500 }}>{round0(r.waitHours)}h</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
           <div className="miniCard">
             <div className="miniHeader">
-              <div className="miniTitle">Franja corta</div>
-              {capacity ? (
-                <div className="utilRight">
-                  <div className="utilPct" style={{ color: usageColor(capacity.franja.used / capacity.franja.limit) }}>
-                    {formatPct0(pct(capacity.franja.used, capacity.franja.limit))}
-                  </div>
-                  <div className="sub mono">
-                    {capacity.franja.used}/{capacity.franja.limit}
-                  </div>
-                </div>
-              ) : (
-                <div className="sub">—</div>
-              )}
+              <div className="miniTitle">Pedidos cerrados manualmente</div>
+              <div className="sub">Últimos 7 días</div>
             </div>
-            {capacity ? (
-              <>
-                <div className="bar" aria-hidden="true">
-                  <div
-                    style={{
-                      width: `${clamp((capacity.franja.used / capacity.franja.limit) * 100, 0, 100)}%`,
-                      background: usageColor(capacity.franja.used / capacity.franja.limit),
-                    }}
-                  />
-                </div>
-                <LineMini
-                  points={(capacity.franja.daily?.length ? capacity.franja.daily : []).map((x, i) => ({ x: i, y: x.used }))}
-                  limit={round0(capacity.franja.limit)}
-                  color="var(--cap1418)"
-                />
-                <div className="utilMeta">
-                  <span className="utilChip utilChipLimit">
-                    <span className="utilChipSwatch utilChipSwatchLimit" aria-hidden="true" />
-                    <span className="utilChipLabel">Capacidad</span>
-                    <span className="utilChipValue">{round0(capacity.franja.limit)}</span>
-                  </span>
-                  <span className="utilChip utilChipUsed">
-                    <span className="utilChipSwatch utilChipSwatchUsed" aria-hidden="true" />
-                    <span className="utilChipLabel">Usado</span>
-                    <span className="utilChipValue">{round0(capacity.franja.used)}</span>
-                  </span>
-                  <span className="utilChip utilChipRemain">
-                    <span className="utilChipSwatch utilChipSwatchRemain" aria-hidden="true" />
-                    <span className="utilChipLabel">Restante</span>
-                    <span className="utilChipValue">{Math.max(0, round0(capacity.franja.limit - capacity.franja.used))}</span>
-                  </span>
-                </div>
-              </>
-            ) : null}
+            <VerticalBars items={manualCloseBars} color="var(--purple)" />
           </div>
         </div>
 
-        <div className="twoCol">
-          <div className="miniCard">
-            <div className="miniHeader">
-              <div className="capHeaderGrid">
-                <div className="capHeaderLeft">
-                  <div className="miniTitle">Flex (14–22) por petshop</div>
-                  <div className="sub">% de uso por petshop (usado / capacidad)</div>
-                </div>
-                <div className="capDayStepper" aria-label="Selector de día">
-                  <button
-                    type="button"
-                    className="btn btnIcon"
-                    onClick={() => setCapDayOffset((d) => Math.max(0, d - 1))}
-                    disabled={capDayOffset <= 0}
-                    aria-label="Día anterior"
-                    title="Anterior"
-                  >
-                    ←
-                  </button>
-                  <div className="capDayLabel" title={capDayLabel}>
-                    <div className="capDayTop mono">{capDayOffset === 0 ? "Hoy" : capDayOffset === 1 ? "Mañana" : `+${capDayOffset}d`}</div>
-                    <div className="capDayBottom mono">{capDayLabel.split(" · ")[1] ?? capDayLabel}</div>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btnIcon"
-                    onClick={() => setCapDayOffset((d) => Math.min(5, d + 1))}
-                    disabled={capDayOffset >= 5}
-                    aria-label="Día siguiente"
-                    title="Siguiente"
-                  >
-                    →
-                  </button>
-                </div>
-              </div>
+        <div className="sectionToolbar" style={{ marginTop: 10 }}>
+          <div className="sectionActions">
+            <button type="button" className="recordsHint recordsHintInline" onClick={() => setRecordsModal("cerradosManual")}>
+              Presioná registros
+            </button>
+            <div className="pager">
+              <button
+                className="btn btnIcon"
+                type="button"
+                onClick={() => setCerradosManualPage((p) => Math.max(0, p - 1))}
+                disabled={cerradosManualPage <= 0}
+                aria-label="Página anterior"
+                title="Anterior"
+              >
+                ←
+              </button>
+              <span className="sub mono">
+                {cerradosManualmenteRowsSorted.length} · {cerradosManualPage + 1}/{cerradosManualPages}
+              </span>
+              <button
+                className="btn btnIcon"
+                type="button"
+                onClick={() => setCerradosManualPage((p) => Math.min(cerradosManualPages - 1, p + 1))}
+                disabled={cerradosManualPage >= cerradosManualPages - 1}
+                aria-label="Página siguiente"
+                title="Siguiente"
+              >
+                →
+              </button>
             </div>
-            {flexCapacityPctRows.length ? (
-              <>
-                <button type="button" className="chartButton" onClick={() => setFlexCapacityOpen(true)} aria-label="Ver usado vs capacidad Flex por petshop">
-                  <div className="flexUtilHeader">
-                    <span className="shortUtilHLabel">Petshop</span>
-                    <span className="shortUtilHWin" style={{ color: "var(--capFlex)" }}>
-                      14–22
-                    </span>
-                  </div>
-                  <div className="flexUtilList">
-                    {flexCapacityPctRows.map((r) => (
-                      <div key={r.id} className="flexUtilRow">
-                        <div className="shortUtilLabel truncate" title={r.label}>
-                          {r.label}
-                        </div>
-                        <div className="shortUtilCell">
-                          {r.flexEnabled ? (
-                            <div className={`shortUtilBar ${nearCapacityPctClass(r.pct0)}`} style={{ ["--c" as never]: "var(--ok)", ["--p" as never]: `${clamp(r.pct0, 0, 100)}%` }}>
-                              {r.pct0}%
-                            </div>
-                          ) : (
-                            <div className="shortUtilBar" style={{ ["--c" as never]: "var(--ok)", ["--p" as never]: `0%` }}>
-                              OFF
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </button>
-                <button type="button" className="capHint capHintBtn" onClick={() => setFlexCapacityOpen(true)}>
-                  Presioná para ver cantidades exactas
-                </button>
-              </>
-            ) : (
-              <div className="sub">—</div>
-            )}
-          </div>
-
-          <div className="miniCard">
-            <div className="miniHeader">
-              <div className="capHeaderGrid">
-                <div className="capHeaderLeft">
-                  <div className="miniTitle">Franja corta por petshop</div>
-                  <div className="sub">% de uso por franja (usado / cap.)</div>
-                </div>
-                <div className="capDayStepper" aria-label="Selector de día">
-                  <button
-                    type="button"
-                    className="btn btnIcon"
-                    onClick={() => setCapDayOffset((d) => Math.max(0, d - 1))}
-                    disabled={capDayOffset <= 0}
-                    aria-label="Día anterior"
-                    title="Anterior"
-                  >
-                    ←
-                  </button>
-                  <div className="capDayLabel" title={capDayLabel}>
-                    <div className="capDayTop mono">{capDayOffset === 0 ? "Hoy" : capDayOffset === 1 ? "Mañana" : `+${capDayOffset}d`}</div>
-                    <div className="capDayBottom mono">{capDayLabel.split(" · ")[1] ?? capDayLabel}</div>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btnIcon"
-                    onClick={() => setCapDayOffset((d) => Math.min(5, d + 1))}
-                    disabled={capDayOffset >= 5}
-                    aria-label="Día siguiente"
-                    title="Siguiente"
-                  >
-                    →
-                  </button>
-                </div>
-              </div>
-            </div>
-            {shortCapacityPctRows.length ? (
-              <>
-                <button type="button" className="chartButton" onClick={() => setShortCapacityOpen(true)} aria-label="Ver usado vs capacidad franja corta por petshop">
-                  <div className="shortUtilHeader">
-                    <span className="shortUtilHLabel">Petshop</span>
-                    <span className="shortUtilHWin" style={{ color: "var(--cap1014)" }}>
-                      10–14
-                    </span>
-                    <span className="shortUtilHWin" style={{ color: "var(--cap1418)" }}>
-                      14–18
-                    </span>
-                    <span className="shortUtilHWin" style={{ color: "var(--cap1822)" }}>
-                      18–22
-                    </span>
-                  </div>
-                  <div className="shortUtilList">
-                    {shortCapacityPctRows.map((r) => (
-                      <div key={r.id} className="shortUtilRow">
-                        <div className="shortUtilLabel truncate" title={r.label}>
-                          {r.label}
-                        </div>
-                        <div className="shortUtilCell">
-                          <div className={`shortUtilBar ${nearCapacityPctClass(r.p1014)}`} style={{ ["--c" as never]: "var(--ok)", ["--p" as never]: `${clamp(r.p1014, 0, 100)}%` }}>
-                            {r.shortEnabled["10-14"] ? `${r.p1014}%` : "OFF"}
-                          </div>
-                        </div>
-                        <div className="shortUtilCell">
-                          <div className={`shortUtilBar ${nearCapacityPctClass(r.p1418)}`} style={{ ["--c" as never]: "var(--ok)", ["--p" as never]: `${clamp(r.p1418, 0, 100)}%` }}>
-                            {r.shortEnabled["14-18"] ? `${r.p1418}%` : "OFF"}
-                          </div>
-                        </div>
-                        <div className="shortUtilCell">
-                          <div className={`shortUtilBar ${nearCapacityPctClass(r.p1822)}`} style={{ ["--c" as never]: "var(--ok)", ["--p" as never]: `${clamp(r.p1822, 0, 100)}%` }}>
-                            {r.shortEnabled["18-22"] ? `${r.p1822}%` : "OFF"}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </button>
-                <button type="button" className="capHint capHintBtn" onClick={() => setShortCapacityOpen(true)}>
-                  Presioná para ver cantidades exactas
-                </button>
-              </>
-            ) : (
-              <div className="sub">—</div>
-            )}
+            <CopyActionButton
+              label="Wpp"
+              className="btnPanelAction"
+              onCopy={async () => {
+                const headers = ["#pedido", "fecha", "franja"];
+                const rows = cerradosManualmenteRowsSorted.map((r) => [
+                  r.orderId,
+                  new Date(r.closedAt).toLocaleDateString("es-AR"),
+                  r.deliveryWindow ?? "",
+                ]);
+                await navigator.clipboard.writeText(toFixedWidthTable(headers, rows, { maxColWidths: [9, 10, 7], wrapInCodeBlock: false }));
+              }}
+            />
+            <CopyActionButton
+              label="Mail"
+              className="btnPanelAction"
+              onCopy={async () => {
+                const headers = ["#pedido", "cerrado", "franja", "cliente", "domicilio", "producto", "petshop", "nota"];
+                const rows = cerradosManualmenteRowsSorted.map((r) => [
+                  r.orderId,
+                  new Date(r.closedAt).toLocaleString("es-AR"),
+                  r.deliveryWindow ?? "",
+                  r.customer,
+                  r.address,
+                  r.product,
+                  r.petshopName ?? "",
+                  r.note,
+                ]);
+                const text = toFixedWidthTable(headers, rows, { maxColWidths: [9, 19, 7, 18, 22, 26, 16, 18], wrapInCodeBlock: true });
+                const html = toHtmlTable(headers, rows);
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const ClipboardItemCtor: any = (window as any).ClipboardItem;
+                if (ClipboardItemCtor && navigator.clipboard?.write) {
+                  await navigator.clipboard.write([
+                    new ClipboardItemCtor({
+                      "text/html": new Blob([html], { type: "text/html" }),
+                      "text/plain": new Blob([text], { type: "text/plain" }),
+                    }),
+                  ]);
+                } else {
+                  await navigator.clipboard.writeText(text);
+                }
+              }}
+            />
+            <button
+              className="btn btnPanelAction"
+              type="button"
+              onClick={() => {
+                const headers = ["pedido", "cerrado", "franja", "cliente", "domicilio", "producto", "petshop", "nota"];
+                const rows = cerradosManualmenteRowsSorted.map((r) => [
+                  r.orderId,
+                  new Date(r.closedAt).toLocaleString("es-AR"),
+                  r.deliveryWindow ?? "",
+                  r.customer,
+                  r.address,
+                  r.product,
+                  r.petshopName ?? "",
+                  r.note,
+                ]);
+                downloadTextFile(`cerrados_manualmente_${from}_${to}.csv`, toCsv(headers, rows, ";"), "text/csv;charset=utf-8");
+              }}
+            >
+              Descargar Excel
+            </button>
           </div>
         </div>
 
-        {shortCapacityOpen ? (
-          <div className="qaModal" role="dialog" aria-modal="true" aria-label="Franja corta · usado vs capacidad">
-            <div className="qaModalPanel">
-              <div className="qaModalHeader">
-                <div className="qaModalTitle">Franja corta · usado vs capacidad · {capDayLabel}</div>
-                <button type="button" className="btn btnIcon" onClick={() => setShortCapacityOpen(false)} aria-label="Cerrar">
-                  ✕
-                </button>
-              </div>
-              <div className="tableScroll">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Petshop</th>
-                      <th>10–14</th>
-                      <th>14–18</th>
-                      <th>18–22</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {shortCapacityRows.map((r) => (
-                      <tr key={r.id}>
-                        <td>{r.label}</td>
-                        <td className={`mono ${r.shortEnabled["10-14"] ? nearCapacityClass(r.used1014, r.limitPerWindow) : ""}`}>
-                          {r.shortEnabled["10-14"] ? `${r.used1014}/${r.limitPerWindow}` : "OFF"}
-                        </td>
-                        <td className={`mono ${r.shortEnabled["14-18"] ? nearCapacityClass(r.used1418, r.limitPerWindow) : ""}`}>
-                          {r.shortEnabled["14-18"] ? `${r.used1418}/${r.limitPerWindow}` : "OFF"}
-                        </td>
-                        <td className={`mono ${r.shortEnabled["18-22"] ? nearCapacityClass(r.used1822, r.limitPerWindow) : ""}`}>
-                          {r.shortEnabled["18-22"] ? `${r.used1822}/${r.limitPerWindow}` : "OFF"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {flexCapacityOpen ? (
-          <div className="qaModal" role="dialog" aria-modal="true" aria-label="Flex (14–22) · usado vs capacidad">
-            <div className="qaModalPanel">
-              <div className="qaModalHeader">
-                <div className="qaModalTitle">Flex (14–22) · usado vs capacidad · {capDayLabel}</div>
-                <button type="button" className="btn btnIcon" onClick={() => setFlexCapacityOpen(false)} aria-label="Cerrar">
-                  ✕
-                </button>
-              </div>
-              <div className="tableScroll">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Petshop</th>
-                      <th>14–22</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {flexCapacityRows.map((r) => (
-                      <tr key={r.id}>
-                        <td>{r.label}</td>
-                        <td className={`mono ${r.flexEnabled ? nearCapacityClass(r.used, r.limit) : ""}`}>{r.flexEnabled ? `${r.used}/${r.limit}` : "OFF"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {recordsModal ? (
-          <div
-            className="qaModal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Registros"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) setRecordsModal(null);
-            }}
-          >
-            <div className="qaModalPanel">
-              <div className="qaModalHeader">
-                <div className="qaModalTitle">
-                  {recordsModal === "reprogramar"
-                    ? "Pedidos a reprogramar · todos"
-                    : recordsModal === "sinDespachar"
-                      ? "Demorado sin despachar · todos"
-                      : recordsModal === "cerradosManual"
-                        ? "Cerrados manualmente · todos"
-                        : "Cancelados · todos"}
-                </div>
-                <button type="button" className="btn btnIcon" onClick={() => setRecordsModal(null)} aria-label="Cerrar">
-                  ✕
-                </button>
-              </div>
-
-              {recordsModal === "reprogramar" ? (
-                <div className="tableScroll">
-                  <table className="tableFixed">
-                    <colgroup>
-                      <col style={{ width: "92px" }} />
-                      <col style={{ width: "160px" }} />
-                      <col style={{ width: "64px" }} />
-                      <col style={{ width: "160px" }} />
-                      <col style={{ width: "260px" }} />
-                      <col style={{ width: "320px" }} />
-                      <col style={{ width: "160px" }} />
-                    </colgroup>
-                    <thead>
-                      <tr>
-                        <th>#pedido</th>
-                        <th>Fecha y hora</th>
-                        <th>Franja</th>
-                        <th>Cliente</th>
-                        <th>Domicilio</th>
-                        <th>Producto</th>
-                        <th>Petshop</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {reprogramarRowsSorted.map((r) => (
-                        <tr key={`${r.orderId}-${r.createdAt}`} data-ps={r.petshopId ?? ""}>
-                          <td className="mono">{r.orderId}</td>
-                          <td>{new Date(r.createdAt).toLocaleString("es-AR")}</td>
-                          <td className="franjaCell">
-                            <WindowPill win={r.deliveryWindow ?? null} />
-                          </td>
-                          <td className="truncate">{r.customer}</td>
-                          <td className="truncate">{r.address}</td>
-                          <td className="truncate">{r.product}</td>
-                          <td className="truncate">{r.petshopName ?? "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : null}
-
-              {recordsModal === "sinDespachar" ? (
-                <div className="tableScroll">
-                  <table className="tableFixed">
-                    <colgroup>
-                      <col style={{ width: "92px" }} />
-                      <col style={{ width: "160px" }} />
-                      <col style={{ width: "64px" }} />
-                      <col style={{ width: "160px" }} />
-                      <col style={{ width: "280px" }} />
-                      <col style={{ width: "340px" }} />
-                      <col style={{ width: "120px" }} />
-                    </colgroup>
-                    <thead>
-                      <tr>
-                        <th>#pedido</th>
-                        <th>Etiqueta impresa</th>
-                        <th>Franja</th>
-                        <th>Cliente</th>
-                        <th>Domicilio</th>
-                        <th>Producto</th>
-                        <th>Horas de espera</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sinDespacharRowsSorted.map((r: SinDespacharRow) => {
-                        const color = r.waitHours > 28 ? "var(--bad)" : r.waitHours >= 24 ? "var(--warn)" : "var(--muted)";
-                        return (
-                          <tr key={`${r.orderId}-${r.labelPrintedAt}`}>
-                            <td className="mono">{r.orderId}</td>
-                            <td>{new Date(r.labelPrintedAt).toLocaleString("es-AR")}</td>
-                            <td className="franjaCell">
-                              <WindowPill win={r.deliveryWindow ?? null} />
-                            </td>
-                            <td className="truncate">{r.customer}</td>
-                            <td className="truncate">{r.address}</td>
-                            <td className="truncate">{r.product}</td>
-                            <td style={{ color, fontWeight: 500 }}>{round0(r.waitHours)}h</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              ) : null}
-
-              {recordsModal === "cerradosManual" ? (
-                <div className="tableScroll">
-                  <table className="tableFixed">
-                    <colgroup>
-                      <col style={{ width: "92px" }} />
-                      <col style={{ width: "160px" }} />
-                      <col style={{ width: "64px" }} />
-                      <col style={{ width: "160px" }} />
-                      <col style={{ width: "280px" }} />
-                      <col style={{ width: "340px" }} />
-                      <col style={{ width: "160px" }} />
-                      <col style={{ width: "220px" }} />
-                    </colgroup>
-                    <thead>
-                      <tr>
-                        <th>#pedido</th>
-                        <th>Cerrado</th>
-                        <th>Franja</th>
-                        <th>Cliente</th>
-                        <th>Domicilio</th>
-                        <th>Producto</th>
-                        <th>Petshop</th>
-                        <th>Nota</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {cerradosManualmenteRowsSorted.map((r: CerradoManualRow) => (
-                        <tr key={`${r.orderId}-${r.closedAt}`}>
-                          <td className="mono">{r.orderId}</td>
-                          <td>{new Date(r.closedAt).toLocaleString("es-AR")}</td>
-                          <td className="franjaCell">
-                            <WindowPill win={r.deliveryWindow ?? null} />
-                          </td>
-                          <td className="truncate">{r.customer}</td>
-                          <td className="truncate">{r.address}</td>
-                          <td className="truncate">{r.product}</td>
-                          <td className="truncate">{r.petshopName ?? "—"}</td>
-                          <td className="truncate">{r.note}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : null}
-
-              {recordsModal === "cancelados" ? (
-                <div className="tableScroll">
-                  <table className="tableFixed">
-                    <colgroup>
-                      <col style={{ width: "92px" }} />
-                      <col style={{ width: "160px" }} />
-                      <col style={{ width: "64px" }} />
-                      <col style={{ width: "160px" }} />
-                      <col style={{ width: "280px" }} />
-                      <col style={{ width: "340px" }} />
-                      <col style={{ width: "160px" }} />
-                      <col style={{ width: "220px" }} />
-                    </colgroup>
-                    <thead>
-                      <tr>
-                        <th>#pedido</th>
-                        <th>Cancelado</th>
-                        <th>Franja</th>
-                        <th>Cliente</th>
-                        <th>Domicilio</th>
-                        <th>Producto</th>
-                        <th>Petshop</th>
-                        <th>Motivo</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {canceladosRowsSorted.map((r: CanceladoRow) => (
-                        <tr key={`${r.orderId}-${r.canceledAt}`}>
-                          <td className="mono">{r.orderId}</td>
-                          <td>{new Date(r.canceledAt).toLocaleString("es-AR")}</td>
-                          <td className="franjaCell">
-                            <WindowPill win={r.deliveryWindow ?? null} />
-                          </td>
-                          <td className="truncate">{r.customer}</td>
-                          <td className="truncate">{r.address}</td>
-                          <td className="truncate">{r.product}</td>
-                          <td className="truncate">{r.petshopName ?? "—"}</td>
-                          <td className="truncate">{r.reason}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
+        <div
+          className="tableScroll"
+          role="button"
+          tabIndex={0}
+          aria-label="Abrir modal con todos los cerrados manualmente"
+          onClick={() => setRecordsModal("cerradosManual")}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") setRecordsModal("cerradosManual");
+          }}
+        >
+          <table className="tableFixed">
+            <colgroup>
+              <col style={{ width: "92px" }} />
+              <col style={{ width: "160px" }} />
+              <col style={{ width: "64px" }} />
+              <col style={{ width: "160px" }} />
+              <col style={{ width: "280px" }} />
+              <col style={{ width: "340px" }} />
+              <col style={{ width: "160px" }} />
+              <col style={{ width: "220px" }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>#pedido</th>
+                <th>Cerrado</th>
+                <th>Franja</th>
+                <th>Cliente</th>
+                <th>Domicilio</th>
+                <th>Producto</th>
+                <th>Petshop</th>
+                <th>Nota</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cerradosManualmenteRowsView.map((r: CerradoManualRow) => (
+                <tr key={`${r.orderId}-${r.closedAt}`}>
+                  <td className="mono">{r.orderId}</td>
+                  <td>{new Date(r.closedAt).toLocaleString("es-AR")}</td>
+                  <td className="franjaCell">
+                    <WindowPill win={r.deliveryWindow ?? null} />
+                  </td>
+                  <td className="truncate">{r.customer}</td>
+                  <td className="truncate">{r.address}</td>
+                  <td className="truncate">{r.product}</td>
+                  <td className="truncate">{r.petshopName ?? "—"}</td>
+                  <td className="truncate">{r.note}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
+
+      <section className="section" id="reprogramar">
+        <div className="sectionToolbar sectionToolbarTop">
+          <div className="sectionToolbarTitle">
+            <h2>Pedidos a reprogramar</h2>
+            <p>Superaron 48hs sin gestión</p>
+          </div>
+          <div className="sectionActions">
+            <button type="button" className="recordsHint recordsHintInline" onClick={() => setRecordsModal("reprogramar")}>
+              Presioná registros
+            </button>
+            <div className="pager">
+              <button
+                className="btn btnIcon"
+                type="button"
+                onClick={() => setReprogramarPage((p) => Math.max(0, p - 1))}
+                disabled={reprogramarPage <= 0}
+                aria-label="Página anterior"
+                title="Anterior"
+              >
+                ←
+              </button>
+              <span className="sub mono">
+                {reprogramarRowsSorted.length} · {reprogramarPage + 1}/{reprogramarPages}
+              </span>
+              <button
+                className="btn btnIcon"
+                type="button"
+                onClick={() => setReprogramarPage((p) => Math.min(reprogramarPages - 1, p + 1))}
+                disabled={reprogramarPage >= reprogramarPages - 1}
+                aria-label="Página siguiente"
+                title="Siguiente"
+              >
+                →
+              </button>
+            </div>
+            <CopyActionButton
+              label="Wpp"
+              className="btnPanelAction"
+              onCopy={async () => {
+                const headers = ["#pedido", "fecha", "franja"];
+                const rows = reprogramarRows.map((r) => [
+                  r.orderId,
+                  new Date(r.createdAt).toLocaleDateString("es-AR"),
+                  r.deliveryWindow ?? "",
+                ]);
+                await navigator.clipboard.writeText(toFixedWidthTable(headers, rows, { maxColWidths: [9, 10, 7], wrapInCodeBlock: false }));
+              }}
+            />
+            <CopyActionButton
+              label="Mail"
+              className="btnPanelAction"
+              onCopy={async () => {
+                const headers = ["#pedido", "fecha y hora", "franja", "cliente", "domicilio", "producto", "petshop"];
+                const rows = reprogramarRows.map((r) => [
+                  r.orderId,
+                  new Date(r.createdAt).toLocaleString("es-AR"),
+                  r.deliveryWindow ?? "",
+                  r.customer,
+                  r.address,
+                  r.product,
+                  r.petshopName ?? "",
+                ]);
+                const text = toFixedWidthTable(headers, rows, { maxColWidths: [9, 19, 7, 18, 22, 26, 16], wrapInCodeBlock: true });
+                const html = toHtmlTable(headers, rows);
+                // Prefer HTML for mail clients; keep text fallback.
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const ClipboardItemCtor: any = (window as any).ClipboardItem;
+                if (ClipboardItemCtor && navigator.clipboard?.write) {
+                  await navigator.clipboard.write([new ClipboardItemCtor({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]);
+                } else {
+                  await navigator.clipboard.writeText(text);
+                }
+              }}
+            />
+            <button
+              className="btn btnPanelAction"
+              type="button"
+              onClick={() => {
+                const headers = ["pedido", "fecha_y_hora", "franja", "cliente", "domicilio", "producto", "petshop"];
+                const rows = reprogramarRows.map((r) => [
+                  r.orderId,
+                  new Date(r.createdAt).toLocaleString("es-AR"),
+                  r.deliveryWindow ?? "",
+                  r.customer,
+                  r.address,
+                  r.product,
+                  r.petshopName ?? "",
+                ]);
+                downloadTextFile(`pedidos_a_reprogramar_${from}_${to}.csv`, toCsv(headers, rows, ";"), "text/csv;charset=utf-8");
+              }}
+            >
+              Descargar Excel
+            </button>
+          </div>
+        </div>
+        <div
+          className="tableScroll"
+          role="button"
+          tabIndex={0}
+          aria-label="Abrir modal con todos los pedidos a reprogramar"
+          onClick={() => setRecordsModal("reprogramar")}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") setRecordsModal("reprogramar");
+          }}
+        >
+          <table className="tableFixed">
+            <colgroup>
+              <col style={{ width: "92px" }} />
+              <col style={{ width: "160px" }} />
+              <col style={{ width: "64px" }} />
+              <col style={{ width: "160px" }} />
+              <col style={{ width: "260px" }} />
+              <col style={{ width: "320px" }} />
+              <col style={{ width: "160px" }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>#pedido</th>
+                <th>Fecha y hora</th>
+                <th>Franja</th>
+                <th>Cliente</th>
+                <th>Domicilio</th>
+                <th>Producto</th>
+                <th>Petshop</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reprogramarRowsView.map((r) => (
+                <tr key={`${r.orderId}-${r.createdAt}`} data-ps={r.petshopId ?? ""}>
+                  <td className="mono">{r.orderId}</td>
+                  <td>{new Date(r.createdAt).toLocaleString("es-AR")}</td>
+                  <td className="franjaCell">
+                    <WindowPill win={r.deliveryWindow ?? null} />
+                  </td>
+                  <td className="truncate">{r.customer}</td>
+                  <td className="truncate">{r.address}</td>
+                  <td className="truncate">{r.product}</td>
+                  <td className="truncate">{r.petshopName ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="section" id="sin-despachar">
+        <div className="sectionToolbar sectionToolbarTop">
+          <div className="sectionToolbarTitle">
+            <h2>Demorado sin despachar</h2>
+            <p>Etiqueta impresa &gt;24hs sin driver</p>
+          </div>
+          <div className="sectionActions">
+            <button type="button" className="recordsHint recordsHintInline" onClick={() => setRecordsModal("sinDespachar")}>
+              Presioná registros
+            </button>
+            <div className="pager">
+              <button
+                className="btn btnIcon"
+                type="button"
+                onClick={() => setSinDespacharPage((p) => Math.max(0, p - 1))}
+                disabled={sinDespacharPage <= 0}
+                aria-label="Página anterior"
+                title="Anterior"
+              >
+                ←
+              </button>
+              <span className="sub mono">
+                {sinDespacharRowsSorted.length} · {sinDespacharPage + 1}/{sinDespacharPages}
+              </span>
+              <button
+                className="btn btnIcon"
+                type="button"
+                onClick={() => setSinDespacharPage((p) => Math.min(sinDespacharPages - 1, p + 1))}
+                disabled={sinDespacharPage >= sinDespacharPages - 1}
+                aria-label="Página siguiente"
+                title="Siguiente"
+              >
+                →
+              </button>
+            </div>
+            <CopyActionButton
+              label="Wpp"
+              className="btnPanelAction"
+              onCopy={async () => {
+                const headers = ["#pedido", "fecha", "franja"];
+                const rows = sinDespacharRows.map((r) => [
+                  r.orderId,
+                  new Date(r.labelPrintedAt).toLocaleDateString("es-AR"),
+                  r.deliveryWindow ?? "",
+                ]);
+                await navigator.clipboard.writeText(toFixedWidthTable(headers, rows, { maxColWidths: [9, 10, 7], wrapInCodeBlock: false }));
+              }}
+            />
+            <CopyActionButton
+              label="Mail"
+              className="btnPanelAction"
+              onCopy={async () => {
+                const headers = ["#pedido", "etiqueta impresa", "franja", "cliente", "domicilio", "producto", "petshop", "horas espera"];
+                const rows = sinDespacharRows.map((r) => [
+                  r.orderId,
+                  new Date(r.labelPrintedAt).toLocaleString("es-AR"),
+                  r.deliveryWindow ?? "",
+                  r.customer,
+                  r.address,
+                  r.product,
+                  r.petshopName ?? "",
+                  `${round0(r.waitHours)}h`,
+                ]);
+                const text = toFixedWidthTable(headers, rows, { maxColWidths: [9, 19, 7, 18, 22, 26, 16, 11], wrapInCodeBlock: true });
+                const html = toHtmlTable(headers, rows);
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const ClipboardItemCtor: any = (window as any).ClipboardItem;
+                if (ClipboardItemCtor && navigator.clipboard?.write) {
+                  await navigator.clipboard.write([new ClipboardItemCtor({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]);
+                } else {
+                  await navigator.clipboard.writeText(text);
+                }
+              }}
+            />
+            <button
+              className="btn btnPanelAction"
+              type="button"
+              onClick={() => {
+                const headers = ["pedido", "etiqueta_impresa", "franja", "cliente", "domicilio", "producto", "petshop", "horas_espera"];
+                const rows = sinDespacharRows.map((r) => [
+                  r.orderId,
+                  new Date(r.labelPrintedAt).toLocaleString("es-AR"),
+                  r.deliveryWindow ?? "",
+                  r.customer,
+                  r.address,
+                  r.product,
+                  r.petshopName ?? "",
+                  String(round0(r.waitHours)),
+                ]);
+                downloadTextFile(`demorado_sin_despachar_${from}_${to}.csv`, toCsv(headers, rows, ";"), "text/csv;charset=utf-8");
+              }}
+            >
+              Descargar Excel
+            </button>
+          </div>
+        </div>
+        <div
+          className="tableScroll"
+          role="button"
+          tabIndex={0}
+          aria-label="Abrir modal con todos los demorados sin despachar"
+          onClick={() => setRecordsModal("sinDespachar")}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") setRecordsModal("sinDespachar");
+          }}
+        >
+          <table className="tableFixed">
+            <colgroup>
+              <col style={{ width: "92px" }} />
+              <col style={{ width: "160px" }} />
+              <col style={{ width: "64px" }} />
+              <col style={{ width: "160px" }} />
+              <col style={{ width: "280px" }} />
+              <col style={{ width: "340px" }} />
+              <col style={{ width: "120px" }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>#pedido</th>
+                <th>Etiqueta impresa</th>
+                <th>Franja</th>
+                <th>Cliente</th>
+                <th>Domicilio</th>
+                <th>Producto</th>
+                <th>Horas de espera</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sinDespacharRowsView.map((r: SinDespacharRow) => {
+                const color = r.waitHours > 28 ? "var(--bad)" : r.waitHours >= 24 ? "var(--warn)" : "var(--muted)";
+                return (
+                  <tr key={`${r.orderId}-${r.labelPrintedAt}`}>
+                    <td className="mono">{r.orderId}</td>
+                    <td>{new Date(r.labelPrintedAt).toLocaleString("es-AR")}</td>
+                    <td className="franjaCell">
+                      <WindowPill win={r.deliveryWindow ?? null} />
+                    </td>
+                    <td className="truncate">{r.customer}</td>
+                    <td className="truncate">{r.address}</td>
+                    <td className="truncate">{r.product}</td>
+                    <td style={{ color, fontWeight: 500 }}>{round0(r.waitHours)}h</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {shortCapacityOpen ? (
+        <div className="qaModal" role="dialog" aria-modal="true" aria-label="Franja corta · usado vs capacidad">
+          <div className="qaModalPanel">
+            <div className="qaModalHeader">
+              <div className="qaModalTitle">Franja corta · usado vs capacidad · {capDayLabel}</div>
+              <button type="button" className="btn btnIcon" onClick={() => setShortCapacityOpen(false)} aria-label="Cerrar">
+                ✕
+              </button>
+            </div>
+            <div className="tableScroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Petshop</th>
+                    <th>10–14</th>
+                    <th>14–18</th>
+                    <th>18–22</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {shortCapacityRows.map((r) => (
+                    <tr key={r.id}>
+                      <td>{r.label}</td>
+                      <td className={`mono ${r.shortEnabled["10-14"] ? nearCapacityClass(r.used1014, r.limitPerWindow) : ""}`}>
+                        {r.shortEnabled["10-14"] ? `${r.used1014}/${r.limitPerWindow}` : "OFF"}
+                      </td>
+                      <td className={`mono ${r.shortEnabled["14-18"] ? nearCapacityClass(r.used1418, r.limitPerWindow) : ""}`}>
+                        {r.shortEnabled["14-18"] ? `${r.used1418}/${r.limitPerWindow}` : "OFF"}
+                      </td>
+                      <td className={`mono ${r.shortEnabled["18-22"] ? nearCapacityClass(r.used1822, r.limitPerWindow) : ""}`}>
+                        {r.shortEnabled["18-22"] ? `${r.used1822}/${r.limitPerWindow}` : "OFF"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {flexCapacityOpen ? (
+        <div className="qaModal" role="dialog" aria-modal="true" aria-label="Flex (14–22) · usado vs capacidad">
+          <div className="qaModalPanel">
+            <div className="qaModalHeader">
+              <div className="qaModalTitle">Flex (14–22) · usado vs capacidad · {capDayLabel}</div>
+              <button type="button" className="btn btnIcon" onClick={() => setFlexCapacityOpen(false)} aria-label="Cerrar">
+                ✕
+              </button>
+            </div>
+            <div className="tableScroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Petshop</th>
+                    <th>14–22</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {flexCapacityRows.map((r) => (
+                    <tr key={r.id}>
+                      <td>{r.label}</td>
+                      <td className={`mono ${r.flexEnabled ? nearCapacityClass(r.used, r.limit) : ""}`}>{r.flexEnabled ? `${r.used}/${r.limit}` : "OFF"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {recordsModal ? (
+        <div
+          className="qaModal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Registros"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setRecordsModal(null);
+          }}
+        >
+          <div className="qaModalPanel">
+            <div className="qaModalHeader">
+              <div className="qaModalTitle">
+                {recordsModal === "reprogramar"
+                  ? "Pedidos a reprogramar · todos"
+                  : recordsModal === "sinDespachar"
+                    ? "Demorado sin despachar · todos"
+                    : recordsModal === "cerradosManual"
+                      ? "Cerrados manualmente · todos"
+                      : "Cancelados · todos"}
+              </div>
+              <button type="button" className="btn btnIcon" onClick={() => setRecordsModal(null)} aria-label="Cerrar">
+                ✕
+              </button>
+            </div>
+
+            {recordsModal === "reprogramar" ? (
+              <div className="tableScroll">
+                <table className="tableFixed">
+                  <colgroup>
+                    <col style={{ width: "92px" }} />
+                    <col style={{ width: "160px" }} />
+                    <col style={{ width: "64px" }} />
+                    <col style={{ width: "160px" }} />
+                    <col style={{ width: "260px" }} />
+                    <col style={{ width: "320px" }} />
+                    <col style={{ width: "160px" }} />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th>#pedido</th>
+                      <th>Fecha y hora</th>
+                      <th>Franja</th>
+                      <th>Cliente</th>
+                      <th>Domicilio</th>
+                      <th>Producto</th>
+                      <th>Petshop</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reprogramarRowsSorted.map((r) => (
+                      <tr key={`${r.orderId}-${r.createdAt}`} data-ps={r.petshopId ?? ""}>
+                        <td className="mono">{r.orderId}</td>
+                        <td>{new Date(r.createdAt).toLocaleString("es-AR")}</td>
+                        <td className="franjaCell">
+                          <WindowPill win={r.deliveryWindow ?? null} />
+                        </td>
+                        <td className="truncate">{r.customer}</td>
+                        <td className="truncate">{r.address}</td>
+                        <td className="truncate">{r.product}</td>
+                        <td className="truncate">{r.petshopName ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+
+            {recordsModal === "sinDespachar" ? (
+              <div className="tableScroll">
+                <table className="tableFixed">
+                  <colgroup>
+                    <col style={{ width: "92px" }} />
+                    <col style={{ width: "160px" }} />
+                    <col style={{ width: "64px" }} />
+                    <col style={{ width: "160px" }} />
+                    <col style={{ width: "280px" }} />
+                    <col style={{ width: "340px" }} />
+                    <col style={{ width: "120px" }} />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th>#pedido</th>
+                      <th>Etiqueta impresa</th>
+                      <th>Franja</th>
+                      <th>Cliente</th>
+                      <th>Domicilio</th>
+                      <th>Producto</th>
+                      <th>Horas de espera</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sinDespacharRowsSorted.map((r: SinDespacharRow) => {
+                      const color = r.waitHours > 28 ? "var(--bad)" : r.waitHours >= 24 ? "var(--warn)" : "var(--muted)";
+                      return (
+                        <tr key={`${r.orderId}-${r.labelPrintedAt}`}>
+                          <td className="mono">{r.orderId}</td>
+                          <td>{new Date(r.labelPrintedAt).toLocaleString("es-AR")}</td>
+                          <td className="franjaCell">
+                            <WindowPill win={r.deliveryWindow ?? null} />
+                          </td>
+                          <td className="truncate">{r.customer}</td>
+                          <td className="truncate">{r.address}</td>
+                          <td className="truncate">{r.product}</td>
+                          <td style={{ color, fontWeight: 500 }}>{round0(r.waitHours)}h</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+
+            {recordsModal === "cerradosManual" ? (
+              <div className="tableScroll">
+                <table className="tableFixed">
+                  <colgroup>
+                    <col style={{ width: "92px" }} />
+                    <col style={{ width: "160px" }} />
+                    <col style={{ width: "64px" }} />
+                    <col style={{ width: "160px" }} />
+                    <col style={{ width: "280px" }} />
+                    <col style={{ width: "340px" }} />
+                    <col style={{ width: "160px" }} />
+                    <col style={{ width: "220px" }} />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th>#pedido</th>
+                      <th>Cerrado</th>
+                      <th>Franja</th>
+                      <th>Cliente</th>
+                      <th>Domicilio</th>
+                      <th>Producto</th>
+                      <th>Petshop</th>
+                      <th>Nota</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cerradosManualmenteRowsSorted.map((r: CerradoManualRow) => (
+                      <tr key={`${r.orderId}-${r.closedAt}`}>
+                        <td className="mono">{r.orderId}</td>
+                        <td>{new Date(r.closedAt).toLocaleString("es-AR")}</td>
+                        <td className="franjaCell">
+                          <WindowPill win={r.deliveryWindow ?? null} />
+                        </td>
+                        <td className="truncate">{r.customer}</td>
+                        <td className="truncate">{r.address}</td>
+                        <td className="truncate">{r.product}</td>
+                        <td className="truncate">{r.petshopName ?? "—"}</td>
+                        <td className="truncate">{r.note}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+
+            {recordsModal === "cancelados" ? (
+              <div className="tableScroll">
+                <table className="tableFixed">
+                  <colgroup>
+                    <col style={{ width: "92px" }} />
+                    <col style={{ width: "160px" }} />
+                    <col style={{ width: "64px" }} />
+                    <col style={{ width: "160px" }} />
+                    <col style={{ width: "280px" }} />
+                    <col style={{ width: "340px" }} />
+                    <col style={{ width: "160px" }} />
+                    <col style={{ width: "220px" }} />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th>#pedido</th>
+                      <th>Cancelado</th>
+                      <th>Franja</th>
+                      <th>Cliente</th>
+                      <th>Domicilio</th>
+                      <th>Producto</th>
+                      <th>Petshop</th>
+                      <th>Motivo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {canceladosRowsSorted.map((r: CanceladoRow) => (
+                      <tr key={`${r.orderId}-${r.canceledAt}`}>
+                        <td className="mono">{r.orderId}</td>
+                        <td>{new Date(r.canceledAt).toLocaleString("es-AR")}</td>
+                        <td className="franjaCell">
+                          <WindowPill win={r.deliveryWindow ?? null} />
+                        </td>
+                        <td className="truncate">{r.customer}</td>
+                        <td className="truncate">{r.address}</td>
+                        <td className="truncate">{r.product}</td>
+                        <td className="truncate">{r.petshopName ?? "—"}</td>
+                        <td className="truncate">{r.reason}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
         </div>
       </div>
     </main>
