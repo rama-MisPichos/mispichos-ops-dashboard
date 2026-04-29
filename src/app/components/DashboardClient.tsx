@@ -843,7 +843,7 @@ export default function DashboardClient() {
   const [loading, setLoading] = useState(false);
 
   const PAGE_SIZE = 5;
-  const [incidenciasTab, setIncidenciasTab] = useState<"reprogramar" | "sinDespachar">("reprogramar");
+  const [incidenciasTab, setIncidenciasTab] = useState<"reprogramar" | "sinDespachar" | "cancelados" | "cerradosManual">("reprogramar");
   const [reprogramarPage, setReprogramarPage] = useState(0);
   const [sinDespacharPage, setSinDespacharPage] = useState(0);
   const [cerradosManualPage, setCerradosManualPage] = useState(0);
@@ -2663,154 +2663,6 @@ export default function DashboardClient() {
           </div>
         </div>
 
-        <div className="sectionToolbar" style={{ marginTop: 10 }}>
-          <div className="sectionActions">
-            <button type="button" className="recordsHint recordsHintInline" onClick={() => setRecordsModal("cancelados")}>
-              Presioná registros
-            </button>
-            <div className="pager">
-              <button
-                className="btn btnIcon"
-                type="button"
-                onClick={() => setCanceladosPage((p) => Math.max(0, p - 1))}
-                disabled={canceladosPage <= 0}
-                aria-label="Página anterior"
-                title="Anterior"
-              >
-                ←
-              </button>
-              <span className="sub mono">
-                {canceladosRowsSorted.length} · {canceladosPage + 1}/{canceladosPages}
-              </span>
-              <button
-                className="btn btnIcon"
-                type="button"
-                onClick={() => setCanceladosPage((p) => Math.min(canceladosPages - 1, p + 1))}
-                disabled={canceladosPage >= canceladosPages - 1}
-                aria-label="Página siguiente"
-                title="Siguiente"
-              >
-                →
-              </button>
-            </div>
-            <CopyActionButton
-              label="Wpp"
-              className="btnPanelAction"
-              onCopy={async () => {
-                const headers = ["#pedido", "fecha", "franja"];
-                const rows = canceladosRowsSorted.map((r) => [
-                  r.orderId,
-                  new Date(r.canceledAt).toLocaleDateString("es-AR"),
-                  r.deliveryWindow ?? "",
-                ]);
-                await navigator.clipboard.writeText(toFixedWidthTable(headers, rows, { maxColWidths: [9, 10, 7], wrapInCodeBlock: false }));
-              }}
-            />
-            <CopyActionButton
-              label="Mail"
-              className="btnPanelAction"
-              onCopy={async () => {
-                const headers = ["#pedido", "cancelado", "franja", "cliente", "domicilio", "producto", "petshop", "motivo"];
-                const rows = canceladosRowsSorted.map((r) => [
-                  r.orderId,
-                  new Date(r.canceledAt).toLocaleString("es-AR"),
-                  r.deliveryWindow ?? "",
-                  r.customer,
-                  r.address,
-                  r.product,
-                  r.petshopName ?? "",
-                  r.reason,
-                ]);
-                const text = toFixedWidthTable(headers, rows, { maxColWidths: [9, 19, 7, 18, 22, 26, 16, 18], wrapInCodeBlock: true });
-                const html = toHtmlTable(headers, rows);
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const ClipboardItemCtor: any = (window as any).ClipboardItem;
-                if (ClipboardItemCtor && navigator.clipboard?.write) {
-                  await navigator.clipboard.write([
-                    new ClipboardItemCtor({
-                      "text/html": new Blob([html], { type: "text/html" }),
-                      "text/plain": new Blob([text], { type: "text/plain" }),
-                    }),
-                  ]);
-                } else {
-                  await navigator.clipboard.writeText(text);
-                }
-              }}
-            />
-            <button
-              className="btn btnPanelAction"
-              type="button"
-              onClick={() => {
-                const headers = ["pedido", "cancelado", "franja", "cliente", "domicilio", "producto", "petshop", "motivo"];
-                const rows = canceladosRowsSorted.map((r) => [
-                  r.orderId,
-                  new Date(r.canceledAt).toLocaleString("es-AR"),
-                  r.deliveryWindow ?? "",
-                  r.customer,
-                  r.address,
-                  r.product,
-                  r.petshopName ?? "",
-                  r.reason,
-                ]);
-                downloadTextFile(`cancelados_${from}_${to}.csv`, toCsv(headers, rows, ";"), "text/csv;charset=utf-8");
-              }}
-            >
-              Descargar Excel
-            </button>
-          </div>
-        </div>
-
-        <div
-          className="tableScroll"
-          role="button"
-          tabIndex={0}
-          aria-label="Abrir modal con todos los cancelados"
-          onClick={() => setRecordsModal("cancelados")}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") setRecordsModal("cancelados");
-          }}
-        >
-          <table className="tableFixed">
-            <colgroup>
-              <col style={{ width: "92px" }} />
-              <col style={{ width: "160px" }} />
-              <col style={{ width: "64px" }} />
-              <col style={{ width: "160px" }} />
-              <col style={{ width: "280px" }} />
-              <col style={{ width: "340px" }} />
-              <col style={{ width: "160px" }} />
-              <col style={{ width: "220px" }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th>#pedido</th>
-                <th>Cancelado</th>
-                <th>Franja</th>
-                <th>Cliente</th>
-                <th>Domicilio</th>
-                <th>Producto</th>
-                <th>Petshop</th>
-                <th>Motivo</th>
-              </tr>
-            </thead>
-            <tbody>
-              {canceladosRowsView.map((r: CanceladoRow) => (
-                <tr key={`${r.orderId}-${r.canceledAt}`}>
-                  <td className="mono">{r.orderId}</td>
-                  <td>{new Date(r.canceledAt).toLocaleString("es-AR")}</td>
-                  <td className="franjaCell">
-                    <WindowPill win={r.deliveryWindow ?? null} />
-                  </td>
-                  <td className="truncate">{r.customer}</td>
-                  <td className="truncate">{r.address}</td>
-                  <td className="truncate">{r.product}</td>
-                  <td className="truncate">{r.petshopName ?? "—"}</td>
-                  <td className="truncate">{r.reason}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       </section>
 
       <section className="section" id="spliteados">
@@ -2942,154 +2794,6 @@ export default function DashboardClient() {
           </div>
         </div>
 
-        <div className="sectionToolbar" style={{ marginTop: 10 }}>
-          <div className="sectionActions">
-            <button type="button" className="recordsHint recordsHintInline" onClick={() => setRecordsModal("cerradosManual")}>
-              Presioná registros
-            </button>
-            <div className="pager">
-              <button
-                className="btn btnIcon"
-                type="button"
-                onClick={() => setCerradosManualPage((p) => Math.max(0, p - 1))}
-                disabled={cerradosManualPage <= 0}
-                aria-label="Página anterior"
-                title="Anterior"
-              >
-                ←
-              </button>
-              <span className="sub mono">
-                {cerradosManualmenteRowsSorted.length} · {cerradosManualPage + 1}/{cerradosManualPages}
-              </span>
-              <button
-                className="btn btnIcon"
-                type="button"
-                onClick={() => setCerradosManualPage((p) => Math.min(cerradosManualPages - 1, p + 1))}
-                disabled={cerradosManualPage >= cerradosManualPages - 1}
-                aria-label="Página siguiente"
-                title="Siguiente"
-              >
-                →
-              </button>
-            </div>
-            <CopyActionButton
-              label="Wpp"
-              className="btnPanelAction"
-              onCopy={async () => {
-                const headers = ["#pedido", "fecha", "franja"];
-                const rows = cerradosManualmenteRowsSorted.map((r) => [
-                  r.orderId,
-                  new Date(r.closedAt).toLocaleDateString("es-AR"),
-                  r.deliveryWindow ?? "",
-                ]);
-                await navigator.clipboard.writeText(toFixedWidthTable(headers, rows, { maxColWidths: [9, 10, 7], wrapInCodeBlock: false }));
-              }}
-            />
-            <CopyActionButton
-              label="Mail"
-              className="btnPanelAction"
-              onCopy={async () => {
-                const headers = ["#pedido", "cerrado", "franja", "cliente", "domicilio", "producto", "petshop", "nota"];
-                const rows = cerradosManualmenteRowsSorted.map((r) => [
-                  r.orderId,
-                  new Date(r.closedAt).toLocaleString("es-AR"),
-                  r.deliveryWindow ?? "",
-                  r.customer,
-                  r.address,
-                  r.product,
-                  r.petshopName ?? "",
-                  r.note,
-                ]);
-                const text = toFixedWidthTable(headers, rows, { maxColWidths: [9, 19, 7, 18, 22, 26, 16, 18], wrapInCodeBlock: true });
-                const html = toHtmlTable(headers, rows);
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const ClipboardItemCtor: any = (window as any).ClipboardItem;
-                if (ClipboardItemCtor && navigator.clipboard?.write) {
-                  await navigator.clipboard.write([
-                    new ClipboardItemCtor({
-                      "text/html": new Blob([html], { type: "text/html" }),
-                      "text/plain": new Blob([text], { type: "text/plain" }),
-                    }),
-                  ]);
-                } else {
-                  await navigator.clipboard.writeText(text);
-                }
-              }}
-            />
-            <button
-              className="btn btnPanelAction"
-              type="button"
-              onClick={() => {
-                const headers = ["pedido", "cerrado", "franja", "cliente", "domicilio", "producto", "petshop", "nota"];
-                const rows = cerradosManualmenteRowsSorted.map((r) => [
-                  r.orderId,
-                  new Date(r.closedAt).toLocaleString("es-AR"),
-                  r.deliveryWindow ?? "",
-                  r.customer,
-                  r.address,
-                  r.product,
-                  r.petshopName ?? "",
-                  r.note,
-                ]);
-                downloadTextFile(`cerrados_manualmente_${from}_${to}.csv`, toCsv(headers, rows, ";"), "text/csv;charset=utf-8");
-              }}
-            >
-              Descargar Excel
-            </button>
-          </div>
-        </div>
-
-        <div
-          className="tableScroll"
-          role="button"
-          tabIndex={0}
-          aria-label="Abrir modal con todos los cerrados manualmente"
-          onClick={() => setRecordsModal("cerradosManual")}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") setRecordsModal("cerradosManual");
-          }}
-        >
-          <table className="tableFixed">
-            <colgroup>
-              <col style={{ width: "92px" }} />
-              <col style={{ width: "160px" }} />
-              <col style={{ width: "64px" }} />
-              <col style={{ width: "160px" }} />
-              <col style={{ width: "280px" }} />
-              <col style={{ width: "340px" }} />
-              <col style={{ width: "160px" }} />
-              <col style={{ width: "220px" }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th>#pedido</th>
-                <th>Cerrado</th>
-                <th>Franja</th>
-                <th>Cliente</th>
-                <th>Domicilio</th>
-                <th>Producto</th>
-                <th>Petshop</th>
-                <th>Nota</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cerradosManualmenteRowsView.map((r: CerradoManualRow) => (
-                <tr key={`${r.orderId}-${r.closedAt}`}>
-                  <td className="mono">{r.orderId}</td>
-                  <td>{new Date(r.closedAt).toLocaleString("es-AR")}</td>
-                  <td className="franjaCell">
-                    <WindowPill win={r.deliveryWindow ?? null} />
-                  </td>
-                  <td className="truncate">{r.customer}</td>
-                  <td className="truncate">{r.address}</td>
-                  <td className="truncate">{r.product}</td>
-                  <td className="truncate">{r.petshopName ?? "—"}</td>
-                  <td className="truncate">{r.note}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       </section>
 
       <section className="section" id="incidencias">
@@ -3098,21 +2802,29 @@ export default function DashboardClient() {
             <select
               className="selectInput"
               value={incidenciasTab}
-              onChange={(e) => setIncidenciasTab(e.target.value as "reprogramar" | "sinDespachar")}
+              onChange={(e) => setIncidenciasTab(e.target.value as "reprogramar" | "sinDespachar" | "cancelados" | "cerradosManual")}
               style={{ fontWeight: 500 }}
             >
               <option value="reprogramar">Pedidos a reprogramar</option>
               <option value="sinDespachar">Demorado sin despachar</option>
+              <option value="cancelados">Cancelados</option>
+              <option value="cerradosManual">Cerrados manualmente</option>
             </select>
             <p>
-              {incidenciasTab === "reprogramar" ? "Superaron 48hs sin gestión" : "Etiqueta impresa >24hs sin driver"}
+              {incidenciasTab === "reprogramar"
+                ? "Superaron 48hs sin gestión"
+                : incidenciasTab === "sinDespachar"
+                ? "Etiqueta impresa >24hs sin driver"
+                : incidenciasTab === "cancelados"
+                ? "Estado operativo"
+                : "Casos aislados + cierres manuales"}
             </p>
           </div>
           <div className="sectionActions">
             {incidenciasTab === "reprogramar" ? (
               <>
                 <button type="button" className="recordsHint recordsHintInline" onClick={() => setRecordsModal("reprogramar")}>
-                  Presioná registros
+                  Presioná registros (más info)
                 </button>
                 <div className="pager">
                   <button
@@ -3198,10 +2910,10 @@ export default function DashboardClient() {
                   Descargar Excel
                 </button>
               </>
-            ) : (
+            ) : incidenciasTab === "sinDespachar" ? (
               <>
                 <button type="button" className="recordsHint recordsHintInline" onClick={() => setRecordsModal("sinDespachar")}>
-                  Presioná registros
+                  Presioná registros (más info)
                 </button>
                 <div className="pager">
                   <button
@@ -3288,6 +3000,196 @@ export default function DashboardClient() {
                   Descargar Excel
                 </button>
               </>
+            ) : incidenciasTab === "cancelados" ? (
+              <>
+                <button type="button" className="recordsHint recordsHintInline" onClick={() => setRecordsModal("cancelados")}>
+                  Presioná registros (más info)
+                </button>
+                <div className="pager">
+                  <button
+                    className="btn btnIcon"
+                    type="button"
+                    onClick={() => setCanceladosPage((p) => Math.max(0, p - 1))}
+                    disabled={canceladosPage <= 0}
+                    aria-label="Página anterior"
+                    title="Anterior"
+                  >
+                    ←
+                  </button>
+                  <span className="sub mono">
+                    {canceladosRowsSorted.length} · {canceladosPage + 1}/{canceladosPages}
+                  </span>
+                  <button
+                    className="btn btnIcon"
+                    type="button"
+                    onClick={() => setCanceladosPage((p) => Math.min(canceladosPages - 1, p + 1))}
+                    disabled={canceladosPage >= canceladosPages - 1}
+                    aria-label="Página siguiente"
+                    title="Siguiente"
+                  >
+                    →
+                  </button>
+                </div>
+                <CopyActionButton
+                  label="Wpp"
+                  className="btnPanelAction"
+                  onCopy={async () => {
+                    const headers = ["#pedido", "fecha", "franja"];
+                    const rows = canceladosRowsSorted.map((r) => [
+                      r.orderId,
+                      new Date(r.canceledAt).toLocaleDateString("es-AR"),
+                      r.deliveryWindow ?? "",
+                    ]);
+                    await navigator.clipboard.writeText(toFixedWidthTable(headers, rows, { maxColWidths: [9, 10, 7], wrapInCodeBlock: false }));
+                  }}
+                />
+                <CopyActionButton
+                  label="Mail"
+                  className="btnPanelAction"
+                  onCopy={async () => {
+                    const headers = ["#pedido", "cancelado", "franja", "cliente", "domicilio", "producto", "petshop", "motivo"];
+                    const rows = canceladosRowsSorted.map((r) => [
+                      r.orderId,
+                      new Date(r.canceledAt).toLocaleString("es-AR"),
+                      r.deliveryWindow ?? "",
+                      r.customer,
+                      r.address,
+                      r.product,
+                      r.petshopName ?? "",
+                      r.reason,
+                    ]);
+                    const text = toFixedWidthTable(headers, rows, { maxColWidths: [9, 19, 7, 18, 22, 26, 16, 18], wrapInCodeBlock: true });
+                    const html = toHtmlTable(headers, rows);
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const ClipboardItemCtor: any = (window as any).ClipboardItem;
+                    if (ClipboardItemCtor && navigator.clipboard?.write) {
+                      await navigator.clipboard.write([
+                        new ClipboardItemCtor({
+                          "text/html": new Blob([html], { type: "text/html" }),
+                          "text/plain": new Blob([text], { type: "text/plain" }),
+                        }),
+                      ]);
+                    } else {
+                      await navigator.clipboard.writeText(text);
+                    }
+                  }}
+                />
+                <button
+                  className="btn btnPanelAction"
+                  type="button"
+                  onClick={() => {
+                    const headers = ["pedido", "cancelado", "franja", "cliente", "domicilio", "producto", "petshop", "motivo"];
+                    const rows = canceladosRowsSorted.map((r) => [
+                      r.orderId,
+                      new Date(r.canceledAt).toLocaleString("es-AR"),
+                      r.deliveryWindow ?? "",
+                      r.customer,
+                      r.address,
+                      r.product,
+                      r.petshopName ?? "",
+                      r.reason,
+                    ]);
+                    downloadTextFile(`cancelados_${from}_${to}.csv`, toCsv(headers, rows, ";"), "text/csv;charset=utf-8");
+                  }}
+                >
+                  Descargar Excel
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" className="recordsHint recordsHintInline" onClick={() => setRecordsModal("cerradosManual")}>
+                  Presioná registros (más info)
+                </button>
+                <div className="pager">
+                  <button
+                    className="btn btnIcon"
+                    type="button"
+                    onClick={() => setCerradosManualPage((p) => Math.max(0, p - 1))}
+                    disabled={cerradosManualPage <= 0}
+                    aria-label="Página anterior"
+                    title="Anterior"
+                  >
+                    ←
+                  </button>
+                  <span className="sub mono">
+                    {cerradosManualmenteRowsSorted.length} · {cerradosManualPage + 1}/{cerradosManualPages}
+                  </span>
+                  <button
+                    className="btn btnIcon"
+                    type="button"
+                    onClick={() => setCerradosManualPage((p) => Math.min(cerradosManualPages - 1, p + 1))}
+                    disabled={cerradosManualPage >= cerradosManualPages - 1}
+                    aria-label="Página siguiente"
+                    title="Siguiente"
+                  >
+                    →
+                  </button>
+                </div>
+                <CopyActionButton
+                  label="Wpp"
+                  className="btnPanelAction"
+                  onCopy={async () => {
+                    const headers = ["#pedido", "fecha", "franja"];
+                    const rows = cerradosManualmenteRowsSorted.map((r) => [
+                      r.orderId,
+                      new Date(r.closedAt).toLocaleDateString("es-AR"),
+                      r.deliveryWindow ?? "",
+                    ]);
+                    await navigator.clipboard.writeText(toFixedWidthTable(headers, rows, { maxColWidths: [9, 10, 7], wrapInCodeBlock: false }));
+                  }}
+                />
+                <CopyActionButton
+                  label="Mail"
+                  className="btnPanelAction"
+                  onCopy={async () => {
+                    const headers = ["#pedido", "cerrado", "franja", "cliente", "domicilio", "producto", "petshop", "nota"];
+                    const rows = cerradosManualmenteRowsSorted.map((r) => [
+                      r.orderId,
+                      new Date(r.closedAt).toLocaleString("es-AR"),
+                      r.deliveryWindow ?? "",
+                      r.customer,
+                      r.address,
+                      r.product,
+                      r.petshopName ?? "",
+                      r.note,
+                    ]);
+                    const text = toFixedWidthTable(headers, rows, { maxColWidths: [9, 19, 7, 18, 22, 26, 16, 18], wrapInCodeBlock: true });
+                    const html = toHtmlTable(headers, rows);
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const ClipboardItemCtor: any = (window as any).ClipboardItem;
+                    if (ClipboardItemCtor && navigator.clipboard?.write) {
+                      await navigator.clipboard.write([
+                        new ClipboardItemCtor({
+                          "text/html": new Blob([html], { type: "text/html" }),
+                          "text/plain": new Blob([text], { type: "text/plain" }),
+                        }),
+                      ]);
+                    } else {
+                      await navigator.clipboard.writeText(text);
+                    }
+                  }}
+                />
+                <button
+                  className="btn btnPanelAction"
+                  type="button"
+                  onClick={() => {
+                    const headers = ["pedido", "cerrado", "franja", "cliente", "domicilio", "producto", "petshop", "nota"];
+                    const rows = cerradosManualmenteRowsSorted.map((r) => [
+                      r.orderId,
+                      new Date(r.closedAt).toLocaleString("es-AR"),
+                      r.deliveryWindow ?? "",
+                      r.customer,
+                      r.address,
+                      r.product,
+                      r.petshopName ?? "",
+                      r.note,
+                    ]);
+                    downloadTextFile(`cerrados_manualmente_${from}_${to}.csv`, toCsv(headers, rows, ";"), "text/csv;charset=utf-8");
+                  }}
+                >
+                  Descargar Excel
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -3340,7 +3242,7 @@ export default function DashboardClient() {
               </tbody>
             </table>
           </div>
-        ) : (
+        ) : incidenciasTab === "sinDespachar" ? (
           <div
             className="tableScroll"
             role="button"
@@ -3389,6 +3291,110 @@ export default function DashboardClient() {
                     </tr>
                   );
                 })}
+              </tbody>
+            </table>
+          </div>
+        ) : incidenciasTab === "cancelados" ? (
+          <div
+            className="tableScroll"
+            role="button"
+            tabIndex={0}
+            aria-label="Abrir modal con todos los cancelados"
+            onClick={() => setRecordsModal("cancelados")}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") setRecordsModal("cancelados");
+            }}
+          >
+            <table className="tableFixed">
+              <colgroup>
+                <col style={{ width: "92px" }} />
+                <col style={{ width: "160px" }} />
+                <col style={{ width: "64px" }} />
+                <col style={{ width: "160px" }} />
+                <col style={{ width: "280px" }} />
+                <col style={{ width: "340px" }} />
+                <col style={{ width: "160px" }} />
+                <col style={{ width: "220px" }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>#pedido</th>
+                  <th>Cancelado</th>
+                  <th>Franja</th>
+                  <th>Cliente</th>
+                  <th>Domicilio</th>
+                  <th>Producto</th>
+                  <th>Petshop</th>
+                  <th>Motivo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {canceladosRowsView.map((r: CanceladoRow) => (
+                  <tr key={`${r.orderId}-${r.canceledAt}`}>
+                    <td className="mono">{r.orderId}</td>
+                    <td>{new Date(r.canceledAt).toLocaleString("es-AR")}</td>
+                    <td className="franjaCell">
+                      <WindowPill win={r.deliveryWindow ?? null} />
+                    </td>
+                    <td className="truncate">{r.customer}</td>
+                    <td className="truncate">{r.address}</td>
+                    <td className="truncate">{r.product}</td>
+                    <td className="truncate">{r.petshopName ?? "—"}</td>
+                    <td className="truncate">{r.reason}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div
+            className="tableScroll"
+            role="button"
+            tabIndex={0}
+            aria-label="Abrir modal con todos los cerrados manualmente"
+            onClick={() => setRecordsModal("cerradosManual")}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") setRecordsModal("cerradosManual");
+            }}
+          >
+            <table className="tableFixed">
+              <colgroup>
+                <col style={{ width: "92px" }} />
+                <col style={{ width: "160px" }} />
+                <col style={{ width: "64px" }} />
+                <col style={{ width: "160px" }} />
+                <col style={{ width: "280px" }} />
+                <col style={{ width: "340px" }} />
+                <col style={{ width: "160px" }} />
+                <col style={{ width: "220px" }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>#pedido</th>
+                  <th>Cerrado</th>
+                  <th>Franja</th>
+                  <th>Cliente</th>
+                  <th>Domicilio</th>
+                  <th>Producto</th>
+                  <th>Petshop</th>
+                  <th>Nota</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cerradosManualmenteRowsView.map((r: CerradoManualRow) => (
+                  <tr key={`${r.orderId}-${r.closedAt}`}>
+                    <td className="mono">{r.orderId}</td>
+                    <td>{new Date(r.closedAt).toLocaleString("es-AR")}</td>
+                    <td className="franjaCell">
+                      <WindowPill win={r.deliveryWindow ?? null} />
+                    </td>
+                    <td className="truncate">{r.customer}</td>
+                    <td className="truncate">{r.address}</td>
+                    <td className="truncate">{r.product}</td>
+                    <td className="truncate">{r.petshopName ?? "—"}</td>
+                    <td className="truncate">{r.note}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
