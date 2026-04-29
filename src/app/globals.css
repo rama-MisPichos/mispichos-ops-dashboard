@@ -870,6 +870,8 @@ html[data-theme] *{
   grid-template-columns: 1fr 1fr;
   gap: 10px 16px;
   max-width: 100%;
+  width: fit-content;
+  margin: 0 auto;
 }
 
 .donutLegendItem{

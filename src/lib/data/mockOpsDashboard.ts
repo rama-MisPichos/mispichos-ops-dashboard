@@ -33,6 +33,17 @@ export type EstancadoRow = OpsRowBase & {
   waitHours: number;
 };
 
+export type CerradoManualRow = OpsRowBase & {
+  closedAt: string; // ISO
+  /** Motivo/resumen del cierre manual */
+  note: string;
+};
+
+export type CanceladoRow = OpsRowBase & {
+  canceledAt: string; // ISO
+  reason: string;
+};
+
 export type TimelineBucket = {
   t: string; // ISO day start
   total: number;
@@ -137,6 +148,8 @@ export type OpsDashboardResponse = {
   reprogramarRows: ReprogramarRow[];
   sinDespacharRows: SinDespacharRow[];
   estancadosRows: EstancadoRow[];
+  cerradosManualmenteRows: CerradoManualRow[];
+  canceladosRows: CanceladoRow[];
   top3Petshops: { petshopId: string; petshopName: string; pct: number; orders: number }[];
 };
 
@@ -364,6 +377,8 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
   const reprogramarRows: ReprogramarRow[] = [];
   const sinDespacharRows: SinDespacharRow[] = [];
   const estancadosRows: EstancadoRow[] = [];
+  const cerradosManualmenteRows: CerradoManualRow[] = [];
+  const canceladosRows: CanceladoRow[] = [];
 
   // Build per-petshop metrics with plausible ranges
   for (const ps of petshops) {
@@ -571,6 +586,49 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
       });
     }
 
+    for (let i = 0; i < Math.min(14, Math.max(1, round0(transacciones * 0.03))); i++) {
+      const win = pickDeliveryWindow(rnd);
+      const baseDate = new Date(now.getTime() - (18 + rnd() * 96) * 60 * 60 * 1000);
+      const createdAt = dateWithWindow(baseDate, win, rnd);
+      const closedAt = new Date(createdAt.getTime() + (2 + rnd() * 18) * 60 * 60 * 1000);
+      const partido = pick(rnd, partidos);
+      const address = `${pick(rnd, streets)} ${partido}`;
+      cerradosManualmenteRows.push({
+        orderId: orderIdNumeric(round0(rnd() * 8000)),
+        createdAt: createdAt.toISOString(),
+        closedAt: closedAt.toISOString(),
+        customer: pick(rnd, customers),
+        address,
+        deliveryWindow: win,
+        product: `1 x ${ps.name} ${pick(rnd, products)}`,
+        petshopId: ps.id,
+        petshopName: ps.name,
+        note: pick(rnd, ["Cliente no responde", "Dirección inválida", "Pago pendiente", "Reasignación manual", "Stock no confirmado"]),
+      });
+    }
+
+    for (let i = 0; i < Math.min(16, cancel); i++) {
+      const win = pickDeliveryWindow(rnd);
+      const baseDate = new Date(now.getTime() - (6 + rnd() * 120) * 60 * 60 * 1000);
+      const createdAt = dateWithWindow(baseDate, win, rnd);
+      const canceledAt = new Date(createdAt.getTime() + (1 + rnd() * 24) * 60 * 60 * 1000);
+      const partido = pick(rnd, partidos);
+      const address = `${pick(rnd, streets)} ${partido}`;
+      const reason = pick(rnd, CANCELLATION_REASONS).label;
+      canceladosRows.push({
+        orderId: orderIdNumeric(round0(rnd() * 8000)),
+        createdAt: createdAt.toISOString(),
+        canceledAt: canceledAt.toISOString(),
+        customer: pick(rnd, customers),
+        address,
+        deliveryWindow: win,
+        product: `1 x ${ps.name} ${pick(rnd, products)}`,
+        petshopId: ps.id,
+        petshopName: ps.name,
+        reason,
+      });
+    }
+
   }
 
   // Un único caso estancado derivado a Mis Pichos (representativo).
@@ -596,6 +654,8 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
   }
 
   estancadosRows.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  cerradosManualmenteRows.sort((a, b) => new Date(b.closedAt).getTime() - new Date(a.closedAt).getTime());
+  canceladosRows.sort((a, b) => new Date(b.canceledAt).getTime() - new Date(a.canceledAt).getTime());
 
   // Daily timeline (global)
   const totalByPetshopToday = metricsByPetshop.map((m) => ({ id: m.petshopId, name: m.petshopName, total: m.total }));
@@ -628,6 +688,8 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
     reprogramarRows,
     sinDespacharRows,
     estancadosRows,
+    cerradosManualmenteRows,
+    canceladosRows,
     top3Petshops,
   };
 }

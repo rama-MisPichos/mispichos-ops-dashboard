@@ -12,7 +12,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { CancellationReasonBucket, OpsDashboardResponse, PetshopMetrics, SinDespacharRow } from "@/lib/data/mockOpsDashboard";
+import type {
+  CanceladoRow,
+  CancellationReasonBucket,
+  CerradoManualRow,
+  OpsDashboardResponse,
+  PetshopMetrics,
+  SinDespacharRow,
+} from "@/lib/data/mockOpsDashboard";
 import AiRecommendations from "./AiRecommendations";
 
 type QuickAccessItem = {
@@ -547,14 +554,6 @@ function toHtmlTable(headers: string[], rows: string[][]) {
   return `<table border="1" cellspacing="0" cellpadding="6" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;font-size:12px">${thead}${tbody}</table>`;
 }
 
-function dtLocalToMs(v: string) {
-  // `datetime-local` returns a local date-time string (no timezone suffix).
-  // `new Date()` interprets it as local time, which matches the UI expectation.
-  if (!v) return null;
-  const ms = new Date(v).getTime();
-  return Number.isFinite(ms) ? ms : null;
-}
-
 function CopyActionButton({
   label,
   onCopy,
@@ -847,10 +846,8 @@ export default function DashboardClient() {
   const PAGE_SIZE = 5;
   const [reprogramarPage, setReprogramarPage] = useState(0);
   const [sinDespacharPage, setSinDespacharPage] = useState(0);
-  const [reprogramarFromDt, setReprogramarFromDt] = useState("");
-  const [reprogramarToDt, setReprogramarToDt] = useState("");
-  const [sinDespacharFromDt, setSinDespacharFromDt] = useState("");
-  const [sinDespacharToDt, setSinDespacharToDt] = useState("");
+  const [cerradosManualPage, setCerradosManualPage] = useState(0);
+  const [canceladosPage, setCanceladosPage] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -993,60 +990,63 @@ export default function DashboardClient() {
     return rows.filter((r) => r.petshopId === petshopId);
   }, [data, petshopId]);
 
-  const reprogramarRowsFiltered = useMemo(() => {
-    const fromMs = dtLocalToMs(reprogramarFromDt);
-    const toMs = dtLocalToMs(reprogramarToDt);
-    return reprogramarRows
-      .filter((r) => {
-        const t = new Date(r.createdAt).getTime();
-        if (fromMs != null && t < fromMs) return false;
-        if (toMs != null && t > toMs) return false;
-        return true;
-      })
-      .slice()
-      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()); // más antiguos arriba
-  }, [reprogramarFromDt, reprogramarRows, reprogramarToDt]);
+  const cerradosManualmenteRows = useMemo(() => {
+    if (!data) return [];
+    const rows = data.cerradosManualmenteRows ?? [];
+    if (petshopId === "ALL") return rows;
+    return rows.filter((r) => r.petshopId === petshopId);
+  }, [data, petshopId]);
 
-  const sinDespacharRowsFiltered = useMemo(() => {
-    const fromMs = dtLocalToMs(sinDespacharFromDt);
-    const toMs = dtLocalToMs(sinDespacharToDt);
-    return sinDespacharRows
-      .filter((r) => {
-        const t = new Date(r.labelPrintedAt).getTime();
-        if (fromMs != null && t < fromMs) return false;
-        if (toMs != null && t > toMs) return false;
-        return true;
-      })
-      .slice()
-      .sort((a, b) => new Date(a.labelPrintedAt).getTime() - new Date(b.labelPrintedAt).getTime()); // más antiguos arriba
-  }, [sinDespacharFromDt, sinDespacharRows, sinDespacharToDt]);
+  const canceladosRows = useMemo(() => {
+    if (!data) return [];
+    const rows = data.canceladosRows ?? [];
+    if (petshopId === "ALL") return rows;
+    return rows.filter((r) => r.petshopId === petshopId);
+  }, [data, petshopId]);
+
+  const reprogramarRowsSorted = useMemo(() => {
+    return reprogramarRows.slice().sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()); // más antiguos arriba
+  }, [reprogramarRows]);
+
+  const sinDespacharRowsSorted = useMemo(() => {
+    return sinDespacharRows.slice().sort((a, b) => new Date(a.labelPrintedAt).getTime() - new Date(b.labelPrintedAt).getTime()); // más antiguos arriba
+  }, [sinDespacharRows]);
+
+  const cerradosManualmenteRowsSorted = useMemo(() => {
+    return cerradosManualmenteRows.slice().sort((a, b) => new Date(a.closedAt).getTime() - new Date(b.closedAt).getTime()); // más antiguos arriba
+  }, [cerradosManualmenteRows]);
+
+  const canceladosRowsSorted = useMemo(() => {
+    return canceladosRows.slice().sort((a, b) => new Date(a.canceledAt).getTime() - new Date(b.canceledAt).getTime()); // más antiguos arriba
+  }, [canceladosRows]);
 
   const reprogramarPages = useMemo(
-    () => Math.max(1, Math.ceil(reprogramarRowsFiltered.length / PAGE_SIZE)),
-    [reprogramarRowsFiltered.length],
+    () => Math.max(1, Math.ceil(reprogramarRowsSorted.length / PAGE_SIZE)),
+    [reprogramarRowsSorted.length],
   );
   const sinDespacharPages = useMemo(
-    () => Math.max(1, Math.ceil(sinDespacharRowsFiltered.length / PAGE_SIZE)),
-    [sinDespacharRowsFiltered.length],
+    () => Math.max(1, Math.ceil(sinDespacharRowsSorted.length / PAGE_SIZE)),
+    [sinDespacharRowsSorted.length],
   );
+
+  const cerradosManualPages = useMemo(
+    () => Math.max(1, Math.ceil(cerradosManualmenteRowsSorted.length / PAGE_SIZE)),
+    [cerradosManualmenteRowsSorted.length],
+  );
+
+  const canceladosPages = useMemo(() => Math.max(1, Math.ceil(canceladosRowsSorted.length / PAGE_SIZE)), [canceladosRowsSorted.length]);
 
   useEffect(() => {
     setReprogramarPage(0);
     setSinDespacharPage(0);
+    setCerradosManualPage(0);
+    setCanceladosPage(0);
   }, [petshopId, from, to]);
 
   useEffect(() => {
     // Cuando cambia el rango (por cualquier medio), mantenemos el calendario alineado al inicio.
     setCalMonth(startOfMonth(ymdToDateLocal(from)));
   }, [from]);
-
-  useEffect(() => {
-    setReprogramarPage(0);
-  }, [reprogramarFromDt, reprogramarToDt]);
-
-  useEffect(() => {
-    setSinDespacharPage(0);
-  }, [sinDespacharFromDt, sinDespacharToDt]);
 
   useEffect(() => {
     setReprogramarPage((p) => Math.min(p, reprogramarPages - 1));
@@ -1056,15 +1056,33 @@ export default function DashboardClient() {
     setSinDespacharPage((p) => Math.min(p, sinDespacharPages - 1));
   }, [sinDespacharPages]);
 
+  useEffect(() => {
+    setCerradosManualPage((p) => Math.min(p, cerradosManualPages - 1));
+  }, [cerradosManualPages]);
+
+  useEffect(() => {
+    setCanceladosPage((p) => Math.min(p, canceladosPages - 1));
+  }, [canceladosPages]);
+
   const reprogramarRowsView = useMemo(() => {
     const start = reprogramarPage * PAGE_SIZE;
-    return reprogramarRowsFiltered.slice(start, start + PAGE_SIZE);
-  }, [reprogramarPage, reprogramarRowsFiltered]);
+    return reprogramarRowsSorted.slice(start, start + PAGE_SIZE);
+  }, [reprogramarPage, reprogramarRowsSorted]);
 
   const sinDespacharRowsView = useMemo(() => {
     const start = sinDespacharPage * PAGE_SIZE;
-    return sinDespacharRowsFiltered.slice(start, start + PAGE_SIZE);
-  }, [sinDespacharPage, sinDespacharRowsFiltered]);
+    return sinDespacharRowsSorted.slice(start, start + PAGE_SIZE);
+  }, [sinDespacharPage, sinDespacharRowsSorted]);
+
+  const cerradosManualmenteRowsView = useMemo(() => {
+    const start = cerradosManualPage * PAGE_SIZE;
+    return cerradosManualmenteRowsSorted.slice(start, start + PAGE_SIZE);
+  }, [cerradosManualPage, cerradosManualmenteRowsSorted]);
+
+  const canceladosRowsView = useMemo(() => {
+    const start = canceladosPage * PAGE_SIZE;
+    return canceladosRowsSorted.slice(start, start + PAGE_SIZE);
+  }, [canceladosPage, canceladosRowsSorted]);
 
   const estancadosRows = useMemo(() => {
     if (!data) return [];
@@ -2269,7 +2287,7 @@ export default function DashboardClient() {
                 ←
               </button>
               <span className="sub mono">
-                {reprogramarRowsFiltered.length} · {reprogramarPage + 1}/{reprogramarPages}
+                {reprogramarRowsSorted.length} · {reprogramarPage + 1}/{reprogramarPages}
               </span>
               <button
                 className="btn btnIcon"
@@ -2281,28 +2299,6 @@ export default function DashboardClient() {
               >
                 →
               </button>
-            </div>
-            <div className="dtRange" aria-label="Filtro por fecha y hora">
-              <input
-                className="dtInput"
-                type="datetime-local"
-                value={reprogramarFromDt}
-                onChange={(e) => setReprogramarFromDt(e.target.value)}
-                aria-label="Desde"
-              />
-              <span className="sub">→</span>
-              <input
-                className="dtInput"
-                type="datetime-local"
-                value={reprogramarToDt}
-                onChange={(e) => setReprogramarToDt(e.target.value)}
-                aria-label="Hasta"
-              />
-              {(reprogramarFromDt || reprogramarToDt) && (
-                <button className="btn btnIcon" type="button" onClick={() => (setReprogramarFromDt(""), setReprogramarToDt(""))} title="Limpiar filtro">
-                  ×
-                </button>
-              )}
             </div>
             <CopyActionButton
               label="Wpp"
@@ -2426,7 +2422,7 @@ export default function DashboardClient() {
                 ←
               </button>
               <span className="sub mono">
-                {sinDespacharRowsFiltered.length} · {sinDespacharPage + 1}/{sinDespacharPages}
+                {sinDespacharRowsSorted.length} · {sinDespacharPage + 1}/{sinDespacharPages}
               </span>
               <button
                 className="btn btnIcon"
@@ -2438,28 +2434,6 @@ export default function DashboardClient() {
               >
                 →
               </button>
-            </div>
-            <div className="dtRange" aria-label="Filtro por fecha y hora">
-              <input
-                className="dtInput"
-                type="datetime-local"
-                value={sinDespacharFromDt}
-                onChange={(e) => setSinDespacharFromDt(e.target.value)}
-                aria-label="Desde"
-              />
-              <span className="sub">→</span>
-              <input
-                className="dtInput"
-                type="datetime-local"
-                value={sinDespacharToDt}
-                onChange={(e) => setSinDespacharToDt(e.target.value)}
-                aria-label="Hasta"
-              />
-              {(sinDespacharFromDt || sinDespacharToDt) && (
-                <button className="btn btnIcon" type="button" onClick={() => (setSinDespacharFromDt(""), setSinDespacharToDt(""))} title="Limpiar filtro">
-                  ×
-                </button>
-              )}
             </div>
             <CopyActionButton
               label="Wpp"
@@ -2635,6 +2609,143 @@ export default function DashboardClient() {
             <VerticalBars items={manualCloseBars} color="var(--purple)" />
           </div>
         </div>
+
+        <div className="sectionToolbar" style={{ marginTop: 10 }}>
+          <div className="sectionActions">
+            <div className="pager">
+              <button
+                className="btn btnIcon"
+                type="button"
+                onClick={() => setCerradosManualPage((p) => Math.max(0, p - 1))}
+                disabled={cerradosManualPage <= 0}
+                aria-label="Página anterior"
+                title="Anterior"
+              >
+                ←
+              </button>
+              <span className="sub mono">
+                {cerradosManualmenteRowsSorted.length} · {cerradosManualPage + 1}/{cerradosManualPages}
+              </span>
+              <button
+                className="btn btnIcon"
+                type="button"
+                onClick={() => setCerradosManualPage((p) => Math.min(cerradosManualPages - 1, p + 1))}
+                disabled={cerradosManualPage >= cerradosManualPages - 1}
+                aria-label="Página siguiente"
+                title="Siguiente"
+              >
+                →
+              </button>
+            </div>
+            <CopyActionButton
+              label="Wpp"
+              className="btnPanelAction"
+              onCopy={async () => {
+                const headers = ["#pedido", "fecha", "franja"];
+                const rows = cerradosManualmenteRowsSorted.map((r) => [
+                  r.orderId,
+                  new Date(r.closedAt).toLocaleDateString("es-AR"),
+                  r.deliveryWindow ?? "",
+                ]);
+                await navigator.clipboard.writeText(toFixedWidthTable(headers, rows, { maxColWidths: [9, 10, 7], wrapInCodeBlock: false }));
+              }}
+            />
+            <CopyActionButton
+              label="Mail"
+              className="btnPanelAction"
+              onCopy={async () => {
+                const headers = ["#pedido", "cerrado", "franja", "cliente", "domicilio", "producto", "petshop", "nota"];
+                const rows = cerradosManualmenteRowsSorted.map((r) => [
+                  r.orderId,
+                  new Date(r.closedAt).toLocaleString("es-AR"),
+                  r.deliveryWindow ?? "",
+                  r.customer,
+                  r.address,
+                  r.product,
+                  r.petshopName ?? "",
+                  r.note,
+                ]);
+                const text = toFixedWidthTable(headers, rows, { maxColWidths: [9, 19, 7, 18, 22, 26, 16, 18], wrapInCodeBlock: true });
+                const html = toHtmlTable(headers, rows);
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const ClipboardItemCtor: any = (window as any).ClipboardItem;
+                if (ClipboardItemCtor && navigator.clipboard?.write) {
+                  await navigator.clipboard.write([
+                    new ClipboardItemCtor({
+                      "text/html": new Blob([html], { type: "text/html" }),
+                      "text/plain": new Blob([text], { type: "text/plain" }),
+                    }),
+                  ]);
+                } else {
+                  await navigator.clipboard.writeText(text);
+                }
+              }}
+            />
+            <button
+              className="btn btnPanelAction"
+              type="button"
+              onClick={() => {
+                const headers = ["pedido", "cerrado", "franja", "cliente", "domicilio", "producto", "petshop", "nota"];
+                const rows = cerradosManualmenteRowsSorted.map((r) => [
+                  r.orderId,
+                  new Date(r.closedAt).toLocaleString("es-AR"),
+                  r.deliveryWindow ?? "",
+                  r.customer,
+                  r.address,
+                  r.product,
+                  r.petshopName ?? "",
+                  r.note,
+                ]);
+                downloadTextFile(`cerrados_manualmente_${from}_${to}.csv`, toCsv(headers, rows, ";"), "text/csv;charset=utf-8");
+              }}
+            >
+              Descargar Excel
+            </button>
+          </div>
+        </div>
+
+        <div className="tableScroll">
+          <table className="tableFixed">
+            <colgroup>
+              <col style={{ width: "92px" }} />
+              <col style={{ width: "160px" }} />
+              <col style={{ width: "64px" }} />
+              <col style={{ width: "160px" }} />
+              <col style={{ width: "280px" }} />
+              <col style={{ width: "340px" }} />
+              <col style={{ width: "160px" }} />
+              <col style={{ width: "220px" }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>#pedido</th>
+                <th>Cerrado</th>
+                <th>Franja</th>
+                <th>Cliente</th>
+                <th>Domicilio</th>
+                <th>Producto</th>
+                <th>Petshop</th>
+                <th>Nota</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cerradosManualmenteRowsView.map((r: CerradoManualRow) => (
+                <tr key={`${r.orderId}-${r.closedAt}`}>
+                  <td className="mono">{r.orderId}</td>
+                  <td>{new Date(r.closedAt).toLocaleString("es-AR")}</td>
+                  <td className="franjaCell">
+                    <WindowPill win={r.deliveryWindow ?? null} />
+                  </td>
+                  <td className="truncate">{r.customer}</td>
+                  <td className="truncate">{r.address}</td>
+                  <td className="truncate">{r.product}</td>
+                  <td className="truncate">{r.petshopName ?? "—"}</td>
+                  <td className="truncate">{r.note}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section className="section" id="cancelados">
@@ -2673,8 +2784,176 @@ export default function DashboardClient() {
               bLabel="Recurrentes"
               bValue={round0((metricsSelected?.cancel ?? 0) * 0.4)}
               bColor="var(--muted)"
+              legendLayout="twoCol"
             />
+
+            {(() => {
+              const totalCancel = metricsSelected?.cancel ?? 0;
+              const d = stableDeltaPctFor(`${petshopId}|${from}|${to}|cancel`);
+              const prev = previousFromDelta(totalCancel, d);
+              const cancelPct = metricsSelected?.cancelPct ?? null;
+              return (
+                <div
+                  className={`kpiMiniBox ${deltaBgClass(deltaBgTone(d, KPI_DELTA_BG.cancel.mode, KPI_DELTA_BG.cancel.neutralAbsPct))}`}
+                  style={{ marginTop: 10 }}
+                  aria-label="Total cancelados"
+                >
+                  <div className="kpiMiniLabel">Total cancelados</div>
+                  <div className="kpiMiniRow">
+                    <div className="kpiMiniValue mono">{totalCancel.toLocaleString("es-AR")}</div>
+                    <div className="kpiMiniDelta">{prev != null ? <DeltaPill deltaPct={d} mode="lower_better" /> : <span className="sub">—</span>}</div>
+                  </div>
+                  <div className="sub" style={{ marginTop: 3 }}>
+                    {prev != null ? (
+                      <>
+                        <span className="mono">Ayer: {round0(prev).toLocaleString("es-AR")}</span>
+                        {cancelPct != null ? <span style={{ marginLeft: 10 }}>· {formatPct0(cancelPct)} del total</span> : null}
+                      </>
+                    ) : (
+                      "—"
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
+        </div>
+
+        <div className="sectionToolbar" style={{ marginTop: 10 }}>
+          <div className="sectionActions">
+            <div className="pager">
+              <button
+                className="btn btnIcon"
+                type="button"
+                onClick={() => setCanceladosPage((p) => Math.max(0, p - 1))}
+                disabled={canceladosPage <= 0}
+                aria-label="Página anterior"
+                title="Anterior"
+              >
+                ←
+              </button>
+              <span className="sub mono">
+                {canceladosRowsSorted.length} · {canceladosPage + 1}/{canceladosPages}
+              </span>
+              <button
+                className="btn btnIcon"
+                type="button"
+                onClick={() => setCanceladosPage((p) => Math.min(canceladosPages - 1, p + 1))}
+                disabled={canceladosPage >= canceladosPages - 1}
+                aria-label="Página siguiente"
+                title="Siguiente"
+              >
+                →
+              </button>
+            </div>
+            <CopyActionButton
+              label="Wpp"
+              className="btnPanelAction"
+              onCopy={async () => {
+                const headers = ["#pedido", "fecha", "franja"];
+                const rows = canceladosRowsSorted.map((r) => [
+                  r.orderId,
+                  new Date(r.canceledAt).toLocaleDateString("es-AR"),
+                  r.deliveryWindow ?? "",
+                ]);
+                await navigator.clipboard.writeText(toFixedWidthTable(headers, rows, { maxColWidths: [9, 10, 7], wrapInCodeBlock: false }));
+              }}
+            />
+            <CopyActionButton
+              label="Mail"
+              className="btnPanelAction"
+              onCopy={async () => {
+                const headers = ["#pedido", "cancelado", "franja", "cliente", "domicilio", "producto", "petshop", "motivo"];
+                const rows = canceladosRowsSorted.map((r) => [
+                  r.orderId,
+                  new Date(r.canceledAt).toLocaleString("es-AR"),
+                  r.deliveryWindow ?? "",
+                  r.customer,
+                  r.address,
+                  r.product,
+                  r.petshopName ?? "",
+                  r.reason,
+                ]);
+                const text = toFixedWidthTable(headers, rows, { maxColWidths: [9, 19, 7, 18, 22, 26, 16, 18], wrapInCodeBlock: true });
+                const html = toHtmlTable(headers, rows);
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const ClipboardItemCtor: any = (window as any).ClipboardItem;
+                if (ClipboardItemCtor && navigator.clipboard?.write) {
+                  await navigator.clipboard.write([
+                    new ClipboardItemCtor({
+                      "text/html": new Blob([html], { type: "text/html" }),
+                      "text/plain": new Blob([text], { type: "text/plain" }),
+                    }),
+                  ]);
+                } else {
+                  await navigator.clipboard.writeText(text);
+                }
+              }}
+            />
+            <button
+              className="btn btnPanelAction"
+              type="button"
+              onClick={() => {
+                const headers = ["pedido", "cancelado", "franja", "cliente", "domicilio", "producto", "petshop", "motivo"];
+                const rows = canceladosRowsSorted.map((r) => [
+                  r.orderId,
+                  new Date(r.canceledAt).toLocaleString("es-AR"),
+                  r.deliveryWindow ?? "",
+                  r.customer,
+                  r.address,
+                  r.product,
+                  r.petshopName ?? "",
+                  r.reason,
+                ]);
+                downloadTextFile(`cancelados_${from}_${to}.csv`, toCsv(headers, rows, ";"), "text/csv;charset=utf-8");
+              }}
+            >
+              Descargar Excel
+            </button>
+          </div>
+        </div>
+
+        <div className="tableScroll">
+          <table className="tableFixed">
+            <colgroup>
+              <col style={{ width: "92px" }} />
+              <col style={{ width: "160px" }} />
+              <col style={{ width: "64px" }} />
+              <col style={{ width: "160px" }} />
+              <col style={{ width: "280px" }} />
+              <col style={{ width: "340px" }} />
+              <col style={{ width: "160px" }} />
+              <col style={{ width: "220px" }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>#pedido</th>
+                <th>Cancelado</th>
+                <th>Franja</th>
+                <th>Cliente</th>
+                <th>Domicilio</th>
+                <th>Producto</th>
+                <th>Petshop</th>
+                <th>Motivo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {canceladosRowsView.map((r: CanceladoRow) => (
+                <tr key={`${r.orderId}-${r.canceledAt}`}>
+                  <td className="mono">{r.orderId}</td>
+                  <td>{new Date(r.canceledAt).toLocaleString("es-AR")}</td>
+                  <td className="franjaCell">
+                    <WindowPill win={r.deliveryWindow ?? null} />
+                  </td>
+                  <td className="truncate">{r.customer}</td>
+                  <td className="truncate">{r.address}</td>
+                  <td className="truncate">{r.product}</td>
+                  <td className="truncate">{r.petshopName ?? "—"}</td>
+                  <td className="truncate">{r.reason}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </section>
 
