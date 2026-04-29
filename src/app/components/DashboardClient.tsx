@@ -38,8 +38,7 @@ const QUICK_ACCESS: QuickAccessItem[] = [
   { topic: "Riesgo", id: "spliteados", label: "Pedidos spliteados" },
   { topic: "Post-venta", id: "soluciones", label: "Soluciones / Devoluciones / Retiros" },
   { topic: "Operación", id: "estancados", label: "Estancados / Cierres manuales" },
-  { topic: "Incidencias", id: "reprogramar", label: "Pedidos a reprogramar" },
-  { topic: "Incidencias", id: "sin-despachar", label: "Demorado sin despachar" },
+  { topic: "Incidencias", id: "incidencias", label: "Incidencias" },
 ];
 
 /**
@@ -844,6 +843,7 @@ export default function DashboardClient() {
   const [loading, setLoading] = useState(false);
 
   const PAGE_SIZE = 5;
+  const [incidenciasTab, setIncidenciasTab] = useState<"reprogramar" | "sinDespachar">("reprogramar");
   const [reprogramarPage, setReprogramarPage] = useState(0);
   const [sinDespacharPage, setSinDespacharPage] = useState(0);
   const [cerradosManualPage, setCerradosManualPage] = useState(0);
@@ -3092,298 +3092,307 @@ export default function DashboardClient() {
         </div>
       </section>
 
-      <section className="section" id="reprogramar">
+      <section className="section" id="incidencias">
         <div className="sectionToolbar sectionToolbarTop">
           <div className="sectionToolbarTitle">
-            <h2>Pedidos a reprogramar</h2>
-            <p>Superaron 48hs sin gestión</p>
+            <select
+              className="selectInput"
+              value={incidenciasTab}
+              onChange={(e) => setIncidenciasTab(e.target.value as "reprogramar" | "sinDespachar")}
+              style={{ fontWeight: 500 }}
+            >
+              <option value="reprogramar">Pedidos a reprogramar</option>
+              <option value="sinDespachar">Demorado sin despachar</option>
+            </select>
+            <p>
+              {incidenciasTab === "reprogramar" ? "Superaron 48hs sin gestión" : "Etiqueta impresa >24hs sin driver"}
+            </p>
           </div>
           <div className="sectionActions">
-            <button type="button" className="recordsHint recordsHintInline" onClick={() => setRecordsModal("reprogramar")}>
-              Presioná registros
-            </button>
-            <div className="pager">
-              <button
-                className="btn btnIcon"
-                type="button"
-                onClick={() => setReprogramarPage((p) => Math.max(0, p - 1))}
-                disabled={reprogramarPage <= 0}
-                aria-label="Página anterior"
-                title="Anterior"
-              >
-                ←
-              </button>
-              <span className="sub mono">
-                {reprogramarRowsSorted.length} · {reprogramarPage + 1}/{reprogramarPages}
-              </span>
-              <button
-                className="btn btnIcon"
-                type="button"
-                onClick={() => setReprogramarPage((p) => Math.min(reprogramarPages - 1, p + 1))}
-                disabled={reprogramarPage >= reprogramarPages - 1}
-                aria-label="Página siguiente"
-                title="Siguiente"
-              >
-                →
-              </button>
-            </div>
-            <CopyActionButton
-              label="Wpp"
-              className="btnPanelAction"
-              onCopy={async () => {
-                const headers = ["#pedido", "fecha", "franja"];
-                const rows = reprogramarRows.map((r) => [
-                  r.orderId,
-                  new Date(r.createdAt).toLocaleDateString("es-AR"),
-                  r.deliveryWindow ?? "",
-                ]);
-                await navigator.clipboard.writeText(toFixedWidthTable(headers, rows, { maxColWidths: [9, 10, 7], wrapInCodeBlock: false }));
-              }}
-            />
-            <CopyActionButton
-              label="Mail"
-              className="btnPanelAction"
-              onCopy={async () => {
-                const headers = ["#pedido", "fecha y hora", "franja", "cliente", "domicilio", "producto", "petshop"];
-                const rows = reprogramarRows.map((r) => [
-                  r.orderId,
-                  new Date(r.createdAt).toLocaleString("es-AR"),
-                  r.deliveryWindow ?? "",
-                  r.customer,
-                  r.address,
-                  r.product,
-                  r.petshopName ?? "",
-                ]);
-                const text = toFixedWidthTable(headers, rows, { maxColWidths: [9, 19, 7, 18, 22, 26, 16], wrapInCodeBlock: true });
-                const html = toHtmlTable(headers, rows);
-                // Prefer HTML for mail clients; keep text fallback.
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const ClipboardItemCtor: any = (window as any).ClipboardItem;
-                if (ClipboardItemCtor && navigator.clipboard?.write) {
-                  await navigator.clipboard.write([new ClipboardItemCtor({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]);
-                } else {
-                  await navigator.clipboard.writeText(text);
-                }
-              }}
-            />
-            <button
-              className="btn btnPanelAction"
-              type="button"
-              onClick={() => {
-                const headers = ["pedido", "fecha_y_hora", "franja", "cliente", "domicilio", "producto", "petshop"];
-                const rows = reprogramarRows.map((r) => [
-                  r.orderId,
-                  new Date(r.createdAt).toLocaleString("es-AR"),
-                  r.deliveryWindow ?? "",
-                  r.customer,
-                  r.address,
-                  r.product,
-                  r.petshopName ?? "",
-                ]);
-                downloadTextFile(`pedidos_a_reprogramar_${from}_${to}.csv`, toCsv(headers, rows, ";"), "text/csv;charset=utf-8");
-              }}
-            >
-              Descargar Excel
-            </button>
+            {incidenciasTab === "reprogramar" ? (
+              <>
+                <button type="button" className="recordsHint recordsHintInline" onClick={() => setRecordsModal("reprogramar")}>
+                  Presioná registros
+                </button>
+                <div className="pager">
+                  <button
+                    className="btn btnIcon"
+                    type="button"
+                    onClick={() => setReprogramarPage((p) => Math.max(0, p - 1))}
+                    disabled={reprogramarPage <= 0}
+                    aria-label="Página anterior"
+                    title="Anterior"
+                  >
+                    ←
+                  </button>
+                  <span className="sub mono">
+                    {reprogramarRowsSorted.length} · {reprogramarPage + 1}/{reprogramarPages}
+                  </span>
+                  <button
+                    className="btn btnIcon"
+                    type="button"
+                    onClick={() => setReprogramarPage((p) => Math.min(reprogramarPages - 1, p + 1))}
+                    disabled={reprogramarPage >= reprogramarPages - 1}
+                    aria-label="Página siguiente"
+                    title="Siguiente"
+                  >
+                    →
+                  </button>
+                </div>
+                <CopyActionButton
+                  label="Wpp"
+                  className="btnPanelAction"
+                  onCopy={async () => {
+                    const headers = ["#pedido", "fecha", "franja"];
+                    const rows = reprogramarRows.map((r) => [
+                      r.orderId,
+                      new Date(r.createdAt).toLocaleDateString("es-AR"),
+                      r.deliveryWindow ?? "",
+                    ]);
+                    await navigator.clipboard.writeText(toFixedWidthTable(headers, rows, { maxColWidths: [9, 10, 7], wrapInCodeBlock: false }));
+                  }}
+                />
+                <CopyActionButton
+                  label="Mail"
+                  className="btnPanelAction"
+                  onCopy={async () => {
+                    const headers = ["#pedido", "fecha y hora", "franja", "cliente", "domicilio", "producto", "petshop"];
+                    const rows = reprogramarRows.map((r) => [
+                      r.orderId,
+                      new Date(r.createdAt).toLocaleString("es-AR"),
+                      r.deliveryWindow ?? "",
+                      r.customer,
+                      r.address,
+                      r.product,
+                      r.petshopName ?? "",
+                    ]);
+                    const text = toFixedWidthTable(headers, rows, { maxColWidths: [9, 19, 7, 18, 22, 26, 16], wrapInCodeBlock: true });
+                    const html = toHtmlTable(headers, rows);
+                    // Prefer HTML for mail clients; keep text fallback.
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const ClipboardItemCtor: any = (window as any).ClipboardItem;
+                    if (ClipboardItemCtor && navigator.clipboard?.write) {
+                      await navigator.clipboard.write([new ClipboardItemCtor({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]);
+                    } else {
+                      await navigator.clipboard.writeText(text);
+                    }
+                  }}
+                />
+                <button
+                  className="btn btnPanelAction"
+                  type="button"
+                  onClick={() => {
+                    const headers = ["pedido", "fecha_y_hora", "franja", "cliente", "domicilio", "producto", "petshop"];
+                    const rows = reprogramarRows.map((r) => [
+                      r.orderId,
+                      new Date(r.createdAt).toLocaleString("es-AR"),
+                      r.deliveryWindow ?? "",
+                      r.customer,
+                      r.address,
+                      r.product,
+                      r.petshopName ?? "",
+                    ]);
+                    downloadTextFile(`pedidos_a_reprogramar_${from}_${to}.csv`, toCsv(headers, rows, ";"), "text/csv;charset=utf-8");
+                  }}
+                >
+                  Descargar Excel
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" className="recordsHint recordsHintInline" onClick={() => setRecordsModal("sinDespachar")}>
+                  Presioná registros
+                </button>
+                <div className="pager">
+                  <button
+                    className="btn btnIcon"
+                    type="button"
+                    onClick={() => setSinDespacharPage((p) => Math.max(0, p - 1))}
+                    disabled={sinDespacharPage <= 0}
+                    aria-label="Página anterior"
+                    title="Anterior"
+                  >
+                    ←
+                  </button>
+                  <span className="sub mono">
+                    {sinDespacharRowsSorted.length} · {sinDespacharPage + 1}/{sinDespacharPages}
+                  </span>
+                  <button
+                    className="btn btnIcon"
+                    type="button"
+                    onClick={() => setSinDespacharPage((p) => Math.min(sinDespacharPages - 1, p + 1))}
+                    disabled={sinDespacharPage >= sinDespacharPages - 1}
+                    aria-label="Página siguiente"
+                    title="Siguiente"
+                  >
+                    →
+                  </button>
+                </div>
+                <CopyActionButton
+                  label="Wpp"
+                  className="btnPanelAction"
+                  onCopy={async () => {
+                    const headers = ["#pedido", "fecha", "franja"];
+                    const rows = sinDespacharRows.map((r) => [
+                      r.orderId,
+                      new Date(r.labelPrintedAt).toLocaleDateString("es-AR"),
+                      r.deliveryWindow ?? "",
+                    ]);
+                    await navigator.clipboard.writeText(toFixedWidthTable(headers, rows, { maxColWidths: [9, 10, 7], wrapInCodeBlock: false }));
+                  }}
+                />
+                <CopyActionButton
+                  label="Mail"
+                  className="btnPanelAction"
+                  onCopy={async () => {
+                    const headers = ["#pedido", "etiqueta impresa", "franja", "cliente", "domicilio", "producto", "petshop", "horas espera"];
+                    const rows = sinDespacharRows.map((r) => [
+                      r.orderId,
+                      new Date(r.labelPrintedAt).toLocaleString("es-AR"),
+                      r.deliveryWindow ?? "",
+                      r.customer,
+                      r.address,
+                      r.product,
+                      r.petshopName ?? "",
+                      `${round0(r.waitHours)}h`,
+                    ]);
+                    const text = toFixedWidthTable(headers, rows, { maxColWidths: [9, 19, 7, 18, 22, 26, 16, 11], wrapInCodeBlock: true });
+                    const html = toHtmlTable(headers, rows);
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const ClipboardItemCtor: any = (window as any).ClipboardItem;
+                    if (ClipboardItemCtor && navigator.clipboard?.write) {
+                      await navigator.clipboard.write([new ClipboardItemCtor({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]);
+                    } else {
+                      await navigator.clipboard.writeText(text);
+                    }
+                  }}
+                />
+                <button
+                  className="btn btnPanelAction"
+                  type="button"
+                  onClick={() => {
+                    const headers = ["pedido", "etiqueta_impresa", "franja", "cliente", "domicilio", "producto", "petshop", "horas_espera"];
+                    const rows = sinDespacharRows.map((r) => [
+                      r.orderId,
+                      new Date(r.labelPrintedAt).toLocaleString("es-AR"),
+                      r.deliveryWindow ?? "",
+                      r.customer,
+                      r.address,
+                      r.product,
+                      r.petshopName ?? "",
+                      String(round0(r.waitHours)),
+                    ]);
+                    downloadTextFile(`demorado_sin_despachar_${from}_${to}.csv`, toCsv(headers, rows, ";"), "text/csv;charset=utf-8");
+                  }}
+                >
+                  Descargar Excel
+                </button>
+              </>
+            )}
           </div>
         </div>
-        <div
-          className="tableScroll"
-          role="button"
-          tabIndex={0}
-          aria-label="Abrir modal con todos los pedidos a reprogramar"
-          onClick={() => setRecordsModal("reprogramar")}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") setRecordsModal("reprogramar");
-          }}
-        >
-          <table className="tableFixed">
-            <colgroup>
-              <col style={{ width: "92px" }} />
-              <col style={{ width: "160px" }} />
-              <col style={{ width: "64px" }} />
-              <col style={{ width: "160px" }} />
-              <col style={{ width: "260px" }} />
-              <col style={{ width: "320px" }} />
-              <col style={{ width: "160px" }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th>#pedido</th>
-                <th>Fecha y hora</th>
-                <th>Franja</th>
-                <th>Cliente</th>
-                <th>Domicilio</th>
-                <th>Producto</th>
-                <th>Petshop</th>
-              </tr>
-            </thead>
-            <tbody>
-              {reprogramarRowsView.map((r) => (
-                <tr key={`${r.orderId}-${r.createdAt}`} data-ps={r.petshopId ?? ""}>
-                  <td className="mono">{r.orderId}</td>
-                  <td>{new Date(r.createdAt).toLocaleString("es-AR")}</td>
-                  <td className="franjaCell">
-                    <WindowPill win={r.deliveryWindow ?? null} />
-                  </td>
-                  <td className="truncate">{r.customer}</td>
-                  <td className="truncate">{r.address}</td>
-                  <td className="truncate">{r.product}</td>
-                  <td className="truncate">{r.petshopName ?? "—"}</td>
+        {incidenciasTab === "reprogramar" ? (
+          <div
+            className="tableScroll"
+            role="button"
+            tabIndex={0}
+            aria-label="Abrir modal con todos los pedidos a reprogramar"
+            onClick={() => setRecordsModal("reprogramar")}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") setRecordsModal("reprogramar");
+            }}
+          >
+            <table className="tableFixed">
+              <colgroup>
+                <col style={{ width: "92px" }} />
+                <col style={{ width: "160px" }} />
+                <col style={{ width: "64px" }} />
+                <col style={{ width: "160px" }} />
+                <col style={{ width: "260px" }} />
+                <col style={{ width: "320px" }} />
+                <col style={{ width: "160px" }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>#pedido</th>
+                  <th>Fecha y hora</th>
+                  <th>Franja</th>
+                  <th>Cliente</th>
+                  <th>Domicilio</th>
+                  <th>Producto</th>
+                  <th>Petshop</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="section" id="sin-despachar">
-        <div className="sectionToolbar sectionToolbarTop">
-          <div className="sectionToolbarTitle">
-            <h2>Demorado sin despachar</h2>
-            <p>Etiqueta impresa &gt;24hs sin driver</p>
-          </div>
-          <div className="sectionActions">
-            <button type="button" className="recordsHint recordsHintInline" onClick={() => setRecordsModal("sinDespachar")}>
-              Presioná registros
-            </button>
-            <div className="pager">
-              <button
-                className="btn btnIcon"
-                type="button"
-                onClick={() => setSinDespacharPage((p) => Math.max(0, p - 1))}
-                disabled={sinDespacharPage <= 0}
-                aria-label="Página anterior"
-                title="Anterior"
-              >
-                ←
-              </button>
-              <span className="sub mono">
-                {sinDespacharRowsSorted.length} · {sinDespacharPage + 1}/{sinDespacharPages}
-              </span>
-              <button
-                className="btn btnIcon"
-                type="button"
-                onClick={() => setSinDespacharPage((p) => Math.min(sinDespacharPages - 1, p + 1))}
-                disabled={sinDespacharPage >= sinDespacharPages - 1}
-                aria-label="Página siguiente"
-                title="Siguiente"
-              >
-                →
-              </button>
-            </div>
-            <CopyActionButton
-              label="Wpp"
-              className="btnPanelAction"
-              onCopy={async () => {
-                const headers = ["#pedido", "fecha", "franja"];
-                const rows = sinDespacharRows.map((r) => [
-                  r.orderId,
-                  new Date(r.labelPrintedAt).toLocaleDateString("es-AR"),
-                  r.deliveryWindow ?? "",
-                ]);
-                await navigator.clipboard.writeText(toFixedWidthTable(headers, rows, { maxColWidths: [9, 10, 7], wrapInCodeBlock: false }));
-              }}
-            />
-            <CopyActionButton
-              label="Mail"
-              className="btnPanelAction"
-              onCopy={async () => {
-                const headers = ["#pedido", "etiqueta impresa", "franja", "cliente", "domicilio", "producto", "petshop", "horas espera"];
-                const rows = sinDespacharRows.map((r) => [
-                  r.orderId,
-                  new Date(r.labelPrintedAt).toLocaleString("es-AR"),
-                  r.deliveryWindow ?? "",
-                  r.customer,
-                  r.address,
-                  r.product,
-                  r.petshopName ?? "",
-                  `${round0(r.waitHours)}h`,
-                ]);
-                const text = toFixedWidthTable(headers, rows, { maxColWidths: [9, 19, 7, 18, 22, 26, 16, 11], wrapInCodeBlock: true });
-                const html = toHtmlTable(headers, rows);
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const ClipboardItemCtor: any = (window as any).ClipboardItem;
-                if (ClipboardItemCtor && navigator.clipboard?.write) {
-                  await navigator.clipboard.write([new ClipboardItemCtor({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]);
-                } else {
-                  await navigator.clipboard.writeText(text);
-                }
-              }}
-            />
-            <button
-              className="btn btnPanelAction"
-              type="button"
-              onClick={() => {
-                const headers = ["pedido", "etiqueta_impresa", "franja", "cliente", "domicilio", "producto", "petshop", "horas_espera"];
-                const rows = sinDespacharRows.map((r) => [
-                  r.orderId,
-                  new Date(r.labelPrintedAt).toLocaleString("es-AR"),
-                  r.deliveryWindow ?? "",
-                  r.customer,
-                  r.address,
-                  r.product,
-                  r.petshopName ?? "",
-                  String(round0(r.waitHours)),
-                ]);
-                downloadTextFile(`demorado_sin_despachar_${from}_${to}.csv`, toCsv(headers, rows, ";"), "text/csv;charset=utf-8");
-              }}
-            >
-              Descargar Excel
-            </button>
-          </div>
-        </div>
-        <div
-          className="tableScroll"
-          role="button"
-          tabIndex={0}
-          aria-label="Abrir modal con todos los demorados sin despachar"
-          onClick={() => setRecordsModal("sinDespachar")}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") setRecordsModal("sinDespachar");
-          }}
-        >
-          <table className="tableFixed">
-            <colgroup>
-              <col style={{ width: "92px" }} />
-              <col style={{ width: "160px" }} />
-              <col style={{ width: "64px" }} />
-              <col style={{ width: "160px" }} />
-              <col style={{ width: "280px" }} />
-              <col style={{ width: "340px" }} />
-              <col style={{ width: "120px" }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th>#pedido</th>
-                <th>Etiqueta impresa</th>
-                <th>Franja</th>
-                <th>Cliente</th>
-                <th>Domicilio</th>
-                <th>Producto</th>
-                <th>Horas de espera</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sinDespacharRowsView.map((r: SinDespacharRow) => {
-                const color = r.waitHours > 28 ? "var(--bad)" : r.waitHours >= 24 ? "var(--warn)" : "var(--muted)";
-                return (
-                  <tr key={`${r.orderId}-${r.labelPrintedAt}`}>
+              </thead>
+              <tbody>
+                {reprogramarRowsView.map((r) => (
+                  <tr key={`${r.orderId}-${r.createdAt}`} data-ps={r.petshopId ?? ""}>
                     <td className="mono">{r.orderId}</td>
-                    <td>{new Date(r.labelPrintedAt).toLocaleString("es-AR")}</td>
+                    <td>{new Date(r.createdAt).toLocaleString("es-AR")}</td>
                     <td className="franjaCell">
                       <WindowPill win={r.deliveryWindow ?? null} />
                     </td>
                     <td className="truncate">{r.customer}</td>
                     <td className="truncate">{r.address}</td>
                     <td className="truncate">{r.product}</td>
-                    <td style={{ color, fontWeight: 500 }}>{round0(r.waitHours)}h</td>
+                    <td className="truncate">{r.petshopName ?? "—"}</td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div
+            className="tableScroll"
+            role="button"
+            tabIndex={0}
+            aria-label="Abrir modal con todos los demorados sin despachar"
+            onClick={() => setRecordsModal("sinDespachar")}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") setRecordsModal("sinDespachar");
+            }}
+          >
+            <table className="tableFixed">
+              <colgroup>
+                <col style={{ width: "92px" }} />
+                <col style={{ width: "160px" }} />
+                <col style={{ width: "64px" }} />
+                <col style={{ width: "160px" }} />
+                <col style={{ width: "280px" }} />
+                <col style={{ width: "340px" }} />
+                <col style={{ width: "120px" }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>#pedido</th>
+                  <th>Etiqueta impresa</th>
+                  <th>Franja</th>
+                  <th>Cliente</th>
+                  <th>Domicilio</th>
+                  <th>Producto</th>
+                  <th>Horas de espera</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sinDespacharRowsView.map((r: SinDespacharRow) => {
+                  const color = r.waitHours > 28 ? "var(--bad)" : r.waitHours >= 24 ? "var(--warn)" : "var(--muted)";
+                  return (
+                    <tr key={`${r.orderId}-${r.labelPrintedAt}`}>
+                      <td className="mono">{r.orderId}</td>
+                      <td>{new Date(r.labelPrintedAt).toLocaleString("es-AR")}</td>
+                      <td className="franjaCell">
+                        <WindowPill win={r.deliveryWindow ?? null} />
+                      </td>
+                      <td className="truncate">{r.customer}</td>
+                      <td className="truncate">{r.address}</td>
+                      <td className="truncate">{r.product}</td>
+                      <td style={{ color, fontWeight: 500 }}>{round0(r.waitHours)}h</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       {shortCapacityOpen ? (
