@@ -60,25 +60,85 @@ function formatPct0(n: number) {
   return `${round0(n)}%`;
 }
 
+function ymdToDateLocal(ymdStr: string) {
+  // Interpretamos yyyy-mm-dd como fecha local (sin timezone) para que el calendario coincida con la UI.
+  const [y, m, d] = ymdStr.split("-").map((x) => Number(x));
+  if (!y || !m || !d) return new Date(NaN);
+  return new Date(y, m - 1, d, 0, 0, 0, 0);
+}
+
+function addDaysLocal(d: Date, days: number) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + days, 0, 0, 0, 0);
+}
+
+function startOfMonth(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
+}
+
+function sameYmd(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+// Umbrales configurables (semaforo) por métrica del tablero.
+// Ajustables a gusto sin tocar la lógica de render.
+const KPI_THRESH = {
+  sl: { warnBelow: 90, badBelow: 85 }, // más alto = mejor
+  onTime: { warnBelow: 90, badBelow: 85 }, // más alto = mejor
+  outTime: { warnAt: 10, badAt: 15 }, // más bajo = mejor
+  cancel: { warnAt: 2, badAt: 4 }, // más bajo = mejor
+};
+
+function toneByLowIsBad(pct0: number, warnBelow: number, badBelow: number): KpiTone {
+  if (!Number.isFinite(pct0)) return "neutral";
+  if (pct0 >= warnBelow) return "ok";
+  if (pct0 >= badBelow) return "warn";
+  return "bad";
+}
+
+function toneByHighIsBad(pct0: number, warnAt: number, badAt: number): KpiTone {
+  if (!Number.isFinite(pct0)) return "neutral";
+  if (pct0 >= badAt) return "bad";
+  if (pct0 >= warnAt) return "warn";
+  return "ok";
+}
+
+function slTone(slPct: number) {
+  return toneByLowIsBad(slPct, KPI_THRESH.sl.warnBelow, KPI_THRESH.sl.badBelow);
+}
+
+function onTimeTone(onTimePct: number) {
+  return toneByLowIsBad(onTimePct, KPI_THRESH.onTime.warnBelow, KPI_THRESH.onTime.badBelow);
+}
+
+function outTimeTone(outTimePct: number) {
+  return toneByHighIsBad(outTimePct, KPI_THRESH.outTime.warnAt, KPI_THRESH.outTime.badAt);
+}
+
+function cancelTone(cancelPct: number) {
+  return toneByHighIsBad(cancelPct, KPI_THRESH.cancel.warnAt, KPI_THRESH.cancel.badAt);
+}
+
 /**
  * Umbrales de estado para Service Level (visual / operativo).
  * Tratamos SL% como un “health metric” con OK / Revisar / Crítico.
  */
 function badgeClassBySl(slPct: number) {
-  if (slPct >= 90) return "pill badgeOk";
-  if (slPct >= 85) return "pill badgeWarn";
+  const t = slTone(slPct);
+  if (t === "ok") return "pill badgeOk";
+  if (t === "warn") return "pill badgeWarn";
   return "pill badgeBad";
 }
 
 function slStatus(slPct: number) {
-  if (slPct >= 90) return "OK";
-  if (slPct >= 85) return "Revisar";
+  const t = slTone(slPct);
+  if (t === "ok") return "OK";
+  if (t === "warn") return "Revisar";
   return "Crítico";
 }
 
 function SlProgress({ slPct }: { slPct: number }) {
   const w = clamp(slPct, 0, 100);
-  const color = slPct >= 90 ? "var(--ok)" : slPct >= 85 ? "var(--warn)" : "var(--bad)";
+  const color = toneColor(slTone(slPct));
   return (
     <div className="bar" aria-hidden="true">
       <div style={{ width: `${w}%`, background: color }} />
@@ -100,6 +160,9 @@ function Doughnut({
   bValue,
   bColor,
   legendLayout = "stack",
+  aAuxValue,
+  bAuxValue,
+  auxLabel,
 }: {
   aLabel: string;
   aValue: number;
@@ -108,6 +171,10 @@ function Doughnut({
   bValue: number;
   bColor: string;
   legendLayout?: "stack" | "twoCol";
+  aAuxValue?: number;
+  bAuxValue?: number;
+  /** Texto para el valor auxiliar (ej: "tx") */
+  auxLabel?: string;
 }) {
   const total = Math.max(1, aValue + bValue);
   const aPct = aValue / total;
@@ -149,9 +216,17 @@ function Doughnut({
           <div>
             <div className="legendTop">
               <span>{aLabel}</span>
-              <span className="mono">{aValue}</span>
             </div>
-            <div className="sub">{formatPct0((aValue / total) * 100)}</div>
+            <div className="donutLegendMetric">
+              <span className="donutLegendPct mono">{formatPct0((aValue / total) * 100)}</span>{" "}
+              <span className="donutLegendCount mono">({aValue.toLocaleString("es-AR")})</span>
+            </div>
+            {typeof aAuxValue === "number" ? (
+              <div className="donutLegendAux mono">
+                {auxLabel ? `${auxLabel}: ` : ""}
+                {aAuxValue.toLocaleString("es-AR")}
+              </div>
+            ) : null}
           </div>
         </div>
         <div className="donutLegendItem">
@@ -159,9 +234,17 @@ function Doughnut({
           <div>
             <div className="legendTop">
               <span>{bLabel}</span>
-              <span className="mono">{bValue}</span>
             </div>
-            <div className="sub">{formatPct0((bValue / total) * 100)}</div>
+            <div className="donutLegendMetric">
+              <span className="donutLegendPct mono">{formatPct0((bValue / total) * 100)}</span>{" "}
+              <span className="donutLegendCount mono">({bValue.toLocaleString("es-AR")})</span>
+            </div>
+            {typeof bAuxValue === "number" ? (
+              <div className="donutLegendAux mono">
+                {auxLabel ? `${auxLabel}: ` : ""}
+                {bAuxValue.toLocaleString("es-AR")}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -220,6 +303,82 @@ function PieSplit({
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function PieAllPetshops({
+  title = "Share por petshop",
+  items,
+  maxSlices = 7,
+}: {
+  title?: string;
+  items: { id: string; label: string; value: number }[];
+  maxSlices?: number; // incluye "Otros" si hace falta
+}) {
+  const total = Math.max(1, items.reduce((s, it) => s + (it.value ?? 0), 0));
+  const sorted = items.slice().sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
+  const main = sorted.slice(0, Math.max(1, maxSlices - 1));
+  const rest = sorted.slice(main.length);
+  const restValue = rest.reduce((s, it) => s + (it.value ?? 0), 0);
+
+  const palette = [
+    "var(--info)",
+    "var(--ok)",
+    "var(--warn)",
+    "var(--bad)",
+    "var(--purple)",
+    "var(--cap1014)",
+    "var(--cap1418)",
+    "var(--cap1822)",
+    "var(--capFlex)",
+    "color-mix(in srgb, var(--muted) 45%, var(--info))",
+  ];
+  const pickColor = (i: number) => palette[i % palette.length];
+
+  const slices = [
+    ...main.map((it, i) => ({ ...it, color: pickColor(i), pct: (it.value / total) * 100 })),
+    ...(restValue > 0
+      ? [
+          {
+            id: "otros",
+            label: "Otros",
+            value: restValue,
+            color: "color-mix(in srgb, var(--muted) 40%, var(--surface2))",
+            pct: (restValue / total) * 100,
+          },
+        ]
+      : []),
+  ];
+
+  let acc = 0;
+  const stops = slices
+    .map((s) => {
+      const from = acc;
+      acc += s.pct;
+      const to = acc;
+      return `${s.color} ${from.toFixed(2)}% ${to.toFixed(2)}%`;
+    })
+    .join(", ");
+
+  return (
+    <div className="pieWrap">
+      <div className="pie" role="img" aria-label={title} style={{ background: `conic-gradient(${stops})` }} />
+      <div className="pieLegend">
+        {slices.map((s) => (
+          <div key={s.id} className="pieLegendItem">
+            <span className="legendSwatch" style={{ background: s.color }} />
+            <div className="pieLegendMain">
+              <div className="pieLegendTop">
+                <span>{s.label}</span>
+                <span className="mono">
+                  {formatPct0(s.pct)} ({s.value.toLocaleString("es-AR")})
+                </span>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -677,6 +836,10 @@ export default function DashboardClient() {
   const [from, setFrom] = useState(() => ymd(new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000)));
   const [to, setTo] = useState(() => ymd(new Date(today.getTime() + 1 * 24 * 60 * 60 * 1000)));
   const [petshopId, setPetshopId] = useState<string>("ALL");
+  const [dateRangeOpen, setDateRangeOpen] = useState(false);
+  const [calMonth, setCalMonth] = useState(() => startOfMonth(ymdToDateLocal(from)));
+  const [draftFromYmd, setDraftFromYmd] = useState<string | null>(null);
+  const [draftToYmdInclusive, setDraftToYmdInclusive] = useState<string | null>(null);
 
   const [data, setData] = useState<OpsDashboardResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -723,6 +886,7 @@ export default function DashboardClient() {
     const total = sum((m) => m.total);
     const delivered = sum((m) => m.delivered);
     const transacciones = sum((m) => m.transacciones);
+    const gmv = sum((m) => m.gmv);
     const demSinDespachar = sum((m) => m.demSinDespachar);
     const vuelta1 = sum((m) => m.vuelta1);
     const vuelta2 = sum((m) => m.vuelta2);
@@ -731,8 +895,12 @@ export default function DashboardClient() {
     const split = sum((m) => m.split);
     const newClients = sum((m) => m.newClients);
     const recurrentClients = sum((m) => m.recurrentClients);
+    const newTransactions = sum((m) => m.newTransactions);
+    const recurrentTransactions = sum((m) => m.recurrentTransactions);
     const onTimeN = sum((m) => m.onTimeN);
     const outTimeN = sum((m) => m.outTimeN);
+    const onTimeTx = sum((m) => m.onTimeTx);
+    const outTimeTx = sum((m) => m.outTimeTx);
     const eligible = Math.max(0, total - cancel);
 
     const slPct = pct(delivered, total);
@@ -743,6 +911,7 @@ export default function DashboardClient() {
       total,
       delivered,
       transacciones,
+      gmv,
       demSinDespachar,
       vuelta1,
       vuelta1pct: pct(vuelta1, total),
@@ -756,10 +925,14 @@ export default function DashboardClient() {
       splitPct: pct(split, transacciones),
       newClients,
       recurrentClients,
+      newTransactions,
+      recurrentTransactions,
       newPct: pct(newClients, newClients + recurrentClients),
       recPct: pct(recurrentClients, newClients + recurrentClients),
       onTimeN,
       outTimeN,
+      onTimeTx,
+      outTimeTx,
       onTimePct: pct(onTimeN, eligible),
       outTimePct: pct(outTimeN, eligible),
       slPct,
@@ -799,6 +972,11 @@ export default function DashboardClient() {
   const top3 = useMemo(() => {
     if (!data) return [];
     return data.top3Petshops;
+  }, [data]);
+
+  const petshopShareAll = useMemo(() => {
+    if (!data) return [];
+    return data.metricsByPetshop.map((m) => ({ id: m.petshopId, label: m.petshopName, value: m.total ?? 0 }));
   }, [data]);
 
   const reprogramarRows = useMemo(() => {
@@ -856,6 +1034,11 @@ export default function DashboardClient() {
     setReprogramarPage(0);
     setSinDespacharPage(0);
   }, [petshopId, from, to]);
+
+  useEffect(() => {
+    // Cuando cambia el rango (por cualquier medio), mantenemos el calendario alineado al inicio.
+    setCalMonth(startOfMonth(ymdToDateLocal(from)));
+  }, [from]);
 
   useEffect(() => {
     setReprogramarPage(0);
@@ -1289,6 +1472,131 @@ export default function DashboardClient() {
 
   return (
     <main className="container">
+      {dateRangeOpen ? (
+        <div
+          className="drModal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Seleccionar rango de fechas"
+          onClick={() => setDateRangeOpen(false)}
+        >
+          <div className="drPanel" onClick={(e) => e.stopPropagation()}>
+            <div className="drHeader">
+              <div className="drTitle">Rango de fechas</div>
+              <button className="btn btnIcon" type="button" onClick={() => setDateRangeOpen(false)} aria-label="Cerrar" title="Cerrar">
+                ×
+              </button>
+            </div>
+
+            {(() => {
+              const month = calMonth;
+              const first = startOfMonth(month);
+              const firstDow = (first.getDay() + 6) % 7; // lunes=0
+              const start = addDaysLocal(first, -firstDow);
+              const days = Array.from({ length: 42 }).map((_, i) => addDaysLocal(start, i));
+
+              const currentFrom = ymdToDateLocal(from);
+              const currentToInclusive = addDaysLocal(ymdToDateLocal(to), -1);
+
+              const a = draftFromYmd ? ymdToDateLocal(draftFromYmd) : currentFrom;
+              const b = draftToYmdInclusive ? ymdToDateLocal(draftToYmdInclusive) : currentToInclusive;
+              const min = a.getTime() <= b.getTime() ? a : b;
+              const max = a.getTime() <= b.getTime() ? b : a;
+
+              function onPickDay(d: Date) {
+                const dYmd = ymd(d);
+                if (!draftFromYmd || (draftFromYmd && draftToYmdInclusive)) {
+                  setDraftFromYmd(dYmd);
+                  setDraftToYmdInclusive(null);
+                  return;
+                }
+                const startD = ymdToDateLocal(draftFromYmd);
+                if (d.getTime() < startD.getTime()) {
+                  setDraftFromYmd(dYmd);
+                  setDraftToYmdInclusive(null);
+                  return;
+                }
+                setDraftToYmdInclusive(dYmd);
+              }
+
+              function applyRange() {
+                const fromY = draftFromYmd ?? from;
+                const toInc = draftToYmdInclusive ?? ymd(addDaysLocal(ymdToDateLocal(to), -1));
+                const toExclusive = ymd(addDaysLocal(ymdToDateLocal(toInc), 1));
+                setFrom(fromY);
+                setTo(toExclusive);
+                setDraftFromYmd(null);
+                setDraftToYmdInclusive(null);
+                setDateRangeOpen(false);
+              }
+
+              const monthLabel = month.toLocaleDateString("es-AR", { month: "long", year: "numeric" });
+              const rangeLabel = `${ymd(min)} → ${ymd(max)}`;
+
+              return (
+                <>
+                  <div className="drMeta">
+                    <div className="sub mono">Seleccionado: {rangeLabel}</div>
+                    <div className="drNav">
+                      <button className="btn btnIcon" type="button" onClick={() => setCalMonth(startOfMonth(addDaysLocal(month, -32)))} title="Mes anterior">
+                        ←
+                      </button>
+                      <div className="mono drMonth">{monthLabel}</div>
+                      <button className="btn btnIcon" type="button" onClick={() => setCalMonth(startOfMonth(addDaysLocal(month, 32)))} title="Mes siguiente">
+                        →
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="drGrid" role="grid" aria-label="Calendario">
+                    {["L", "M", "X", "J", "V", "S", "D"].map((w) => (
+                      <div key={w} className="drWeek">
+                        {w}
+                      </div>
+                    ))}
+                    {days.map((d) => {
+                      const isOtherMonth = d.getMonth() !== month.getMonth();
+                      const inRange = d.getTime() >= min.getTime() && d.getTime() <= max.getTime();
+                      const isStart = sameYmd(d, min);
+                      const isEnd = sameYmd(d, max);
+                      return (
+                        <button
+                          key={d.toISOString()}
+                          type="button"
+                          className={`drDay ${isOtherMonth ? "isOther" : ""} ${inRange ? "inRange" : ""} ${isStart ? "isStart" : ""} ${
+                            isEnd ? "isEnd" : ""
+                          }`}
+                          onClick={() => onPickDay(d)}
+                          aria-label={d.toLocaleDateString("es-AR")}
+                        >
+                          {d.getDate()}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="drActions">
+                    <button
+                      className="btn"
+                      type="button"
+                      onClick={() => {
+                        setDraftFromYmd(from);
+                        setDraftToYmdInclusive(ymd(addDaysLocal(ymdToDateLocal(to), -1)));
+                      }}
+                    >
+                      Reset
+                    </button>
+                    <button className="btn btnPanelAction" type="button" onClick={applyRange}>
+                      Aplicar
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      ) : null}
+
       <div className={`topbar ${topbarHidden ? "topbarHidden" : ""}`}>
         <div className="title">
           <h1>Operaciones · MisPichos</h1>
@@ -1307,6 +1615,31 @@ export default function DashboardClient() {
           >
             {isMobile ? "Accesos" : qaDockOpen ? "Accesos ▾" : "Accesos ▸"}
           </button>
+          <label className="chip">
+            <span>Petshop</span>
+            <select className="selectInput" value={petshopId} onChange={(e) => setPetshopId(e.target.value)}>
+              <option value="ALL">Todos los petshops</option>
+              {petshops.map((p0) => (
+                <option key={p0.id} value={p0.id}>
+                  {p0.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            className="chip chipBtn"
+            onClick={() => {
+              setDraftFromYmd(from);
+              setDraftToYmdInclusive(ymd(addDaysLocal(ymdToDateLocal(to), -1)));
+              setDateRangeOpen(true);
+            }}
+            aria-label="Seleccionar rango de fechas"
+            title="Rango de fechas"
+          >
+            <span>Rango</span>
+            <span className="mono">{`${from} → ${ymd(addDaysLocal(ymdToDateLocal(to), -1))}`}</span>
+          </button>
           <button
             type="button"
             className={`themeToggle ${theme === "dark" ? "isDark" : "isLight"}`}
@@ -1319,25 +1652,6 @@ export default function DashboardClient() {
             </span>
             <span className="themeToggleText">{theme === "dark" ? "Oscuro" : "Claro"}</span>
           </button>
-          <label className="chip">
-            <span>Petshop</span>
-            <select className="selectInput" value={petshopId} onChange={(e) => setPetshopId(e.target.value)}>
-              <option value="ALL">Todos los petshops</option>
-              {petshops.map((p0) => (
-                <option key={p0.id} value={p0.id}>
-                  {p0.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="chip">
-            <span>Desde</span>
-            <input className="dateInput" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-          </label>
-          <label className="chip">
-            <span>Hasta</span>
-            <input className="dateInput" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-          </label>
         </div>
       </div>
 
@@ -1468,66 +1782,77 @@ export default function DashboardClient() {
         </div>
 
         <div className="kpiRow">
-          <div
-            className={`kpiMain ${
-              metricsSelected && totalDeltaPct != null
-                ? deltaBgClass(deltaBgTone(totalDeltaPct, KPI_DELTA_BG.total.mode, KPI_DELTA_BG.total.neutralAbsPct))
-                : "kpiBgNeutral"
-            }`}
-          >
-            <div className="kpiLabel">Total pedidos</div>
-            <div className="kpiValueRow">
-              <div className="kpiValue">{metricsSelected ? metricsSelected.total.toLocaleString("es-AR") : "—"}</div>
-              <div className="kpiDeltaRight">
-                {metricsSelected && totalDeltaPct != null ? <DeltaPill deltaPct={totalDeltaPct} mode="higher_better" /> : <span className="sub">—</span>}
+          <div className="kpiMainCol">
+            <div
+              className={`kpiMain ${
+                metricsSelected && totalDeltaPct != null
+                  ? deltaBgClass(deltaBgTone(totalDeltaPct, KPI_DELTA_BG.total.mode, KPI_DELTA_BG.total.neutralAbsPct))
+                  : "kpiBgNeutral"
+              }`}
+            >
+              <div className="kpiLabel">Total pedidos</div>
+              <div className="kpiValueRow">
+                <div className="kpiValue">{metricsSelected ? metricsSelected.total.toLocaleString("es-AR") : "—"}</div>
+                <div className="kpiDeltaRight">
+                  {metricsSelected && totalDeltaPct != null ? <DeltaPill deltaPct={totalDeltaPct} mode="higher_better" /> : <span className="sub">—</span>}
+                </div>
+              </div>
+              <div className="kpiSub">
+                {metricsSelected && totalDeltaPct != null ? (
+                  (() => {
+                    const prev = previousFromDelta(metricsSelected.total ?? 0, totalDeltaPct);
+                    return prev != null ? <span className="mono">Anterior: {round0(prev).toLocaleString("es-AR")}</span> : <span>—</span>;
+                  })()
+                ) : (
+                  "—"
+                )}
+              </div>
+              <div className="kpiDetail">
+                <span className="kpiDetailLabel">Transacciones</span>
+                <span className="mono">{metricsSelected ? metricsSelected.transacciones.toLocaleString("es-AR") : "—"}</span>
+              </div>
+              <div className="kpiDetail">
+                <span className="kpiDetailLabel">GMV</span>
+                <span className="mono kpiGmvValue">
+                  {metricsSelected
+                    ? (metricsSelected.gmv ?? 0).toLocaleString("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 })
+                    : "—"}
+                </span>
               </div>
             </div>
-            <div className="kpiSub">
-              {metricsSelected && totalDeltaPct != null ? (
-                (() => {
-                  const prev = previousFromDelta(metricsSelected.total ?? 0, totalDeltaPct);
-                  return prev != null ? <span className="mono">Anterior: {round0(prev).toLocaleString("es-AR")}</span> : <span>—</span>;
-                })()
-              ) : (
-                "—"
-              )}
-            </div>
-            <div className="kpiDivider" />
-            <div className="kpiDetail">
-              <span className="kpiDetailLabel">Transacciones</span>
-              <span className="mono">{metricsSelected ? metricsSelected.transacciones.toLocaleString("es-AR") : "—"}</span>
-            </div>
 
-            <div className="kpiMiniGrid" aria-label="Indicadores generales">
-              {(() => {
-                // Mismo % que el doughnut "Entregas a tiempo": A tiempo / (A tiempo + Fuera de tiempo)
-                const onTimePct =
-                  metricsSelected != null ? pct(metricsSelected.onTimeN ?? 0, (metricsSelected.onTimeN ?? 0) + (metricsSelected.outTimeN ?? 0)) : null;
-                const dOnTime = stableDeltaPctFor(`${petshopId}|${from}|${to}|onTimePct`);
-                const slPct = petshopId === "ALL" ? slPctAvgAll : metricsSelected?.slPct ?? null;
-                const dSl = stableDeltaPctFor(`${petshopId}|${from}|${to}|${petshopId === "ALL" ? "slPctAvg" : "slPct"}`);
+            {(() => {
+              // Mismo % que el doughnut "Entregas a tiempo": A tiempo / (A tiempo + Fuera de tiempo)
+              const onTimePct =
+                metricsSelected != null ? pct(metricsSelected.onTimeN ?? 0, (metricsSelected.onTimeN ?? 0) + (metricsSelected.outTimeN ?? 0)) : null;
+              const dOnTime = stableDeltaPctFor(`${petshopId}|${from}|${to}|onTimePct`);
+              const slPct = petshopId === "ALL" ? slPctAvgAll : metricsSelected?.slPct ?? null;
+              const dSl = stableDeltaPctFor(`${petshopId}|${from}|${to}|${petshopId === "ALL" ? "slPctAvg" : "slPct"}`);
 
-                return (
-                  <>
-                    <div className={`kpiMiniBox ${deltaBgClass(deltaBgTone(dOnTime, KPI_DELTA_BG.onTime.mode, KPI_DELTA_BG.onTime.neutralAbsPct))}`}>
-                      <div className="kpiMiniLabel">On-time</div>
-                      <div className="kpiMiniRow">
-                        <div className="kpiMiniValue mono">{onTimePct != null ? formatPct0(onTimePct) : "—"}</div>
-                        <div className="kpiMiniDelta">{onTimePct != null ? <DeltaPill deltaPct={dOnTime} mode="higher_better" /> : <span className="sub">—</span>}</div>
+              return (
+                <div className="kpiMiniGrid kpiMiniBelow" aria-label="On-time y Service level">
+                  <div className={`kpiMiniBox ${deltaBgClass(deltaBgTone(dSl, KPI_DELTA_BG.sl.mode, KPI_DELTA_BG.sl.neutralAbsPct))}`}>
+                    <div className="kpiMiniLabel">{petshopId === "ALL" ? "Service level (prom.)" : "Service level"}</div>
+                    <div className="kpiMiniRow">
+                      <div className="kpiMiniValue mono">{slPct != null ? formatPct0(slPct) : "—"}</div>
+                      <div className="kpiMiniDelta">
+                        {slPct != null ? <DeltaPill deltaPct={dSl} mode="higher_better" /> : <span className="sub">—</span>}
                       </div>
                     </div>
+                  </div>
 
-                    <div className={`kpiMiniBox ${deltaBgClass(deltaBgTone(dSl, KPI_DELTA_BG.sl.mode, KPI_DELTA_BG.sl.neutralAbsPct))}`}>
-                      <div className="kpiMiniLabel">{petshopId === "ALL" ? "Service level (prom.)" : "Service level"}</div>
-                      <div className="kpiMiniRow">
-                        <div className="kpiMiniValue mono">{slPct != null ? formatPct0(slPct) : "—"}</div>
-                        <div className="kpiMiniDelta">{slPct != null ? <DeltaPill deltaPct={dSl} mode="higher_better" /> : <span className="sub">—</span>}</div>
+                  <div className={`kpiMiniBox ${deltaBgClass(deltaBgTone(dOnTime, KPI_DELTA_BG.onTime.mode, KPI_DELTA_BG.onTime.neutralAbsPct))}`}>
+                    <div className="kpiMiniLabel">On-time</div>
+                    <div className="kpiMiniRow">
+                      <div className="kpiMiniValue mono">{onTimePct != null ? formatPct0(onTimePct) : "—"}</div>
+                      <div className="kpiMiniDelta">
+                        {onTimePct != null ? <DeltaPill deltaPct={dOnTime} mode="higher_better" /> : <span className="sub">—</span>}
                       </div>
                     </div>
-                  </>
-                );
-              })()}
-            </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           <div className="kpiSmallGrid">
@@ -1536,23 +1861,23 @@ export default function DashboardClient() {
                 metricsSelected
                   ? deltaBgClass(
                       deltaBgTone(
-                        stableDeltaPctFor(`${petshopId}|${from}|${to}|cancel`),
-                        KPI_DELTA_BG.cancel.mode,
-                        KPI_DELTA_BG.cancel.neutralAbsPct
+                        stableDeltaPctFor(`${petshopId}|${from}|${to}|demSinDespachar`),
+                        KPI_DELTA_BG.demSinDespachar.mode,
+                        KPI_DELTA_BG.demSinDespachar.neutralAbsPct
                       )
                     )
                   : "kpiBgNeutral"
               }`}
             >
-              <div className="kpiLabel">Cancelados</div>
+              <div className="kpiLabel">Demorado sin despachar</div>
               {metricsSelected ? (
                 (() => {
-                  const d = stableDeltaPctFor(`${petshopId}|${from}|${to}|cancel`);
-                  const prev = previousFromDelta(metricsSelected.cancel ?? 0, d);
+                  const d = stableDeltaPctFor(`${petshopId}|${from}|${to}|demSinDespachar`);
+                  const prev = previousFromDelta(metricsSelected.demSinDespachar ?? 0, d);
                   return (
                     <>
                       <div className="kpiValueRow">
-                        <div className="kpiValue">{metricsSelected.cancel}</div>
+                        <div className="kpiValue">{metricsSelected.demSinDespachar}</div>
                         <div className="kpiDeltaRight">{prev != null ? <DeltaPill deltaPct={d} mode="lower_better" /> : <span className="sub">—</span>}</div>
                       </div>
                       <div className="kpiSub">{prev != null ? <span className="mono">Anterior: {round0(prev).toLocaleString("es-AR")}</span> : "—"}</div>
@@ -1656,23 +1981,23 @@ export default function DashboardClient() {
                 metricsSelected
                   ? deltaBgClass(
                       deltaBgTone(
-                        stableDeltaPctFor(`${petshopId}|${from}|${to}|demSinDespachar`),
-                        KPI_DELTA_BG.demSinDespachar.mode,
-                        KPI_DELTA_BG.demSinDespachar.neutralAbsPct
+                        stableDeltaPctFor(`${petshopId}|${from}|${to}|cancel`),
+                        KPI_DELTA_BG.cancel.mode,
+                        KPI_DELTA_BG.cancel.neutralAbsPct
                       )
                     )
                   : "kpiBgNeutral"
               }`}
             >
-              <div className="kpiLabel">Demorado sin despachar</div>
+              <div className="kpiLabel">Cancelados</div>
               {metricsSelected ? (
                 (() => {
-                  const d = stableDeltaPctFor(`${petshopId}|${from}|${to}|demSinDespachar`);
-                  const prev = previousFromDelta(metricsSelected.demSinDespachar ?? 0, d);
+                  const d = stableDeltaPctFor(`${petshopId}|${from}|${to}|cancel`);
+                  const prev = previousFromDelta(metricsSelected.cancel ?? 0, d);
                   return (
                     <>
                       <div className="kpiValueRow">
-                        <div className="kpiValue">{metricsSelected.demSinDespachar}</div>
+                        <div className="kpiValue">{metricsSelected.cancel}</div>
                         <div className="kpiDeltaRight">{prev != null ? <DeltaPill deltaPct={d} mode="lower_better" /> : <span className="sub">—</span>}</div>
                       </div>
                       <div className="kpiSub">{prev != null ? <span className="mono">Anterior: {round0(prev).toLocaleString("es-AR")}</span> : "—"}</div>
@@ -1746,6 +2071,9 @@ export default function DashboardClient() {
               bLabel="Recurrentes"
               bValue={metricsSelected?.recurrentClients ?? 0}
               bColor="var(--muted)"
+              aAuxValue={metricsSelected?.newTransactions ?? 0}
+              bAuxValue={metricsSelected?.recurrentTransactions ?? 0}
+              auxLabel="tx"
               legendLayout="twoCol"
             />
           </div>
@@ -1753,11 +2081,6 @@ export default function DashboardClient() {
             <div className="miniHeader">
               <div className="miniTitle">Entregas a tiempo</div>
             </div>
-            <p className="sub">
-              {metricsSelected
-                ? `Sobre creadas no canceladas: ${Math.max(0, metricsSelected.total - metricsSelected.cancel).toLocaleString("es-AR")}`
-                : "—"}
-            </p>
             <Doughnut
               aLabel="A tiempo"
               aValue={metricsSelected?.onTimeN ?? 0}
@@ -1765,6 +2088,9 @@ export default function DashboardClient() {
               bLabel="Fuera de tiempo"
               bValue={metricsSelected?.outTimeN ?? 0}
               bColor="var(--bad)"
+              aAuxValue={metricsSelected?.onTimeTx ?? 0}
+              bAuxValue={metricsSelected?.outTimeTx ?? 0}
+              auxLabel="tx"
               legendLayout="twoCol"
             />
           </div>
@@ -1785,6 +2111,9 @@ export default function DashboardClient() {
                 <tr>
                   <th>Petshop</th>
                   <th>SL %</th>
+                  <th>On-time</th>
+                  <th>Out-time</th>
+                  <th>Cancelados</th>
                   <th>Estado</th>
                   <th>Creadas</th>
                   <th>Entregadas</th>
@@ -1795,8 +2124,15 @@ export default function DashboardClient() {
                 {slRows.map((r) => (
                   <tr key={r.petshopId}>
                     <td>{r.petshopName}</td>
-                    <td style={{ color: r.slPct >= 90 ? "var(--ok)" : r.slPct >= 85 ? "var(--warn)" : "var(--bad)" }}>
-                      {formatPct0(r.slPct)}
+                    <td style={{ color: toneColor(slTone(r.slPct)) }}>{formatPct0(r.slPct)} ({r.delivered.toLocaleString("es-AR")})</td>
+                    <td style={{ color: toneColor(onTimeTone(r.onTimePct)) }}>
+                      {formatPct0(r.onTimePct)} ({r.onTimeN.toLocaleString("es-AR")})
+                    </td>
+                    <td style={{ color: toneColor(outTimeTone(r.outTimePct)) }}>
+                      {formatPct0(r.outTimePct)} ({r.outTimeN.toLocaleString("es-AR")})
+                    </td>
+                    <td style={{ color: toneColor(cancelTone(r.cancelPct)) }}>
+                      {formatPct0(r.cancelPct)} ({r.cancel.toLocaleString("es-AR")})
                     </td>
                     <td>
                       <span className={badgeClassBySl(r.slPct)}>{slStatus(r.slPct)}</span>
@@ -1818,6 +2154,9 @@ export default function DashboardClient() {
                   <th>Creadas</th>
                   <th>Entregadas</th>
                   <th>SL %</th>
+                  <th>On-time</th>
+                  <th>Out-time</th>
+                  <th>Cancelados</th>
                   <th>Progreso</th>
                   <th>Estado</th>
                 </tr>
@@ -1828,8 +2167,15 @@ export default function DashboardClient() {
                     <td>{r.petshopName}</td>
                     <td className="mono">{r.total.toLocaleString("es-AR")}</td>
                     <td className="mono">{r.delivered.toLocaleString("es-AR")}</td>
-                    <td style={{ color: r.slPct >= 90 ? "var(--ok)" : r.slPct >= 85 ? "var(--warn)" : "var(--bad)" }}>
-                      {formatPct0(r.slPct)}
+                    <td style={{ color: toneColor(slTone(r.slPct)) }}>{formatPct0(r.slPct)} ({r.delivered.toLocaleString("es-AR")})</td>
+                    <td style={{ color: toneColor(onTimeTone(r.onTimePct)) }}>
+                      {formatPct0(r.onTimePct)} ({r.onTimeN.toLocaleString("es-AR")})
+                    </td>
+                    <td style={{ color: toneColor(outTimeTone(r.outTimePct)) }}>
+                      {formatPct0(r.outTimePct)} ({r.outTimeN.toLocaleString("es-AR")})
+                    </td>
+                    <td style={{ color: toneColor(cancelTone(r.cancelPct)) }}>
+                      {formatPct0(r.cancelPct)} ({r.cancel.toLocaleString("es-AR")})
                     </td>
                     <td>
                       <SlProgress slPct={r.slPct} />
@@ -1852,39 +2198,53 @@ export default function DashboardClient() {
             <p>Share de pedidos</p>
           </div>
         </div>
-        <div className="top3">
-          {top3.map((t0, i) => (
-            <div key={t0.petshopId} className="top3Item">
-              <div className="rankCircle" data-rank={i + 1}>
-                {i + 1}
-              </div>
-              {isMobile ? (
-                <div className="top3Main">
-                  <div className="top3Name">{t0.petshopName}</div>
-                  <div className="bar" aria-hidden="true">
-                    <div style={{ width: `${clamp(t0.pct, 0, 100)}%`, background: "var(--info)" }} />
-                  </div>
-                  <div className="top3MetaRow">
-                    <div className="mono">{formatPct0(t0.pct)}</div>
-                    <div className="mono">{t0.orders.toLocaleString("es-AR")} pedidos</div>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div className="top3Main">
-                    <div className="top3Name">{t0.petshopName}</div>
-                    <div className="bar" aria-hidden="true">
-                      <div style={{ width: `${clamp(t0.pct, 0, 100)}%`, background: "var(--info)" }} />
-                    </div>
-                  </div>
-                  <div className="top3Pct">
-                    <div className="mono">{formatPct0(t0.pct)}</div>
-                    <div className="sub mono">{t0.orders.toLocaleString("es-AR")} pedidos</div>
-                  </div>
-                </>
-              )}
+        <div className="twoCol">
+          <div className="miniCard">
+            <div className="miniHeader">
+              <div className="miniTitle">Top 3</div>
             </div>
-          ))}
+            <div className="top3">
+              {top3.map((t0, i) => (
+                <div key={t0.petshopId} className="top3Item">
+                  <div className="rankCircle" data-rank={i + 1}>
+                    {i + 1}
+                  </div>
+                  {isMobile ? (
+                    <div className="top3Main">
+                      <div className="top3Name">{t0.petshopName}</div>
+                      <div className="bar" aria-hidden="true">
+                        <div style={{ width: `${clamp(t0.pct, 0, 100)}%`, background: "var(--info)" }} />
+                      </div>
+                      <div className="top3MetaRow">
+                        <div className="mono">{formatPct0(t0.pct)}</div>
+                        <div className="mono">{t0.orders.toLocaleString("es-AR")} pedidos</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="top3Main">
+                        <div className="top3Name">{t0.petshopName}</div>
+                        <div className="bar" aria-hidden="true">
+                          <div style={{ width: `${clamp(t0.pct, 0, 100)}%`, background: "var(--info)" }} />
+                        </div>
+                      </div>
+                      <div className="top3Pct">
+                        <div className="mono">{formatPct0(t0.pct)}</div>
+                        <div className="sub mono">{t0.orders.toLocaleString("es-AR")} pedidos</div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="miniCard">
+            <div className="miniHeader">
+              <div className="miniTitle">Share (todos)</div>
+            </div>
+            <PieAllPetshops title="Share de pedidos por petshop" items={petshopShareAll} />
+          </div>
         </div>
       </section>
 

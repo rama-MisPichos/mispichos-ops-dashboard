@@ -403,6 +403,107 @@ html[data-theme] *{
   align-items: center;
 }
 
+.chipBtn{
+  cursor: pointer;
+}
+.chipBtn:hover{
+  background: color-mix(in srgb, var(--surface) 88%, var(--surface2));
+}
+
+/* Tema siempre a la derecha del todo (desktop) */
+.chipRow .themeToggle{
+  margin-left: auto;
+}
+
+.drModal{
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0,0,0,0.45);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding: 12px;
+}
+.drPanel{
+  width: min(520px, 100%);
+  background: var(--surface);
+  border: 0.5px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-radius: 18px;
+  box-shadow: 0 18px 55px rgba(0,0,0,0.14);
+  padding: 12px;
+}
+.drHeader{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.drTitle{
+  font-weight: 650;
+  color: var(--text);
+}
+.drMeta{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.drNav{
+  display:flex;
+  align-items:center;
+  gap: 8px;
+}
+.drMonth{
+  min-width: 170px;
+  text-transform: capitalize;
+}
+.drGrid{
+  display:grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+.drWeek{
+  font-size: 10px;
+  color: var(--muted);
+  text-align:center;
+  padding: 2px 0;
+  font-weight: 650;
+}
+.drDay{
+  height: 34px;
+  border-radius: 10px;
+  border: 0.5px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--surface2) 55%, var(--surface));
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+.drDay:hover{
+  background: color-mix(in srgb, var(--surface2) 70%, var(--surface));
+}
+.drDay.isOther{
+  opacity: .45;
+}
+.drDay.inRange{
+  background: color-mix(in srgb, var(--infoBg) 55%, var(--surface));
+  border-color: color-mix(in srgb, var(--info) 20%, var(--border));
+}
+.drDay.isStart,
+.drDay.isEnd{
+  background: color-mix(in srgb, var(--infoBg) 85%, var(--surface));
+  border-color: color-mix(in srgb, var(--info) 35%, var(--border));
+  font-weight: 700;
+}
+.drActions{
+  display:flex;
+  justify-content:flex-end;
+  gap: 10px;
+  margin-top: 12px;
+}
+
 .selectInput{
   background: var(--surface2);
   border: 0.5px solid var(--border);
@@ -462,6 +563,30 @@ html[data-theme] *{
   grid-template-columns: 320px 1fr;
   gap: 12px;
   margin-top: 10px;
+}
+
+.kpiMainCol{
+  display:flex;
+  flex-direction:column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.kpiAuxCard{
+  background: var(--surface2);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  border: 0.5px solid color-mix(in srgb, var(--border) 78%, transparent);
+  box-shadow: 0 10px 22px rgba(0,0,0,0.04);
+}
+
+.kpiAuxTitle{
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: .12px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
 }
 
 .kpiMain{
@@ -559,10 +684,21 @@ html[data-theme] *{
 
 .kpiDetailLabel{ font-weight: 500; }
 
+.kpiGmvValue{
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: .12px;
+  color: var(--text);
+}
+
 .kpiMiniGrid{
   display:grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+  margin-top: 10px;
+}
+
+.kpiMiniBelow{
   margin-top: 10px;
 }
 
@@ -740,6 +876,28 @@ html[data-theme] *{
   display:flex;
   gap: 10px;
   align-items:flex-start;
+}
+
+.donutLegendMetric{
+  margin-top: 2px;
+  line-height: 1.1;
+}
+
+.donutLegendPct{
+  font-size: 13px;
+  font-weight: 750;
+  color: var(--text);
+}
+
+.donutLegendCount{
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.donutLegendAux{
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--muted);
 }
 
 .pieWrap{

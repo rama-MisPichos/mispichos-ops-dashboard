@@ -77,6 +77,8 @@ export type PetshopMetrics = {
   total: number;
   delivered: number;
   transacciones: number;
+  /** GMV del período (monto total vendido) */
+  gmv: number;
   demSinDespachar: number;
   vuelta1: number;
   vuelta1pct: number;
@@ -91,10 +93,18 @@ export type PetshopMetrics = {
   recurrentClients: number;
   newPct: number;
   recPct: number;
+  /** Transacciones asociadas a "Nuevos" (aprox. en mock) */
+  newTransactions: number;
+  /** Transacciones asociadas a "Recurrentes" (aprox. en mock) */
+  recurrentTransactions: number;
   /** Entregadas a tiempo (sobre creadas no canceladas) */
   onTimeN: number;
   /** Entregadas fuera de tiempo (sobre creadas no canceladas) */
   outTimeN: number;
+  /** Transacciones a tiempo (aprox. en mock) */
+  onTimeTx: number;
+  /** Transacciones fuera de tiempo (aprox. en mock) */
+  outTimeTx: number;
   /** % entregadas a tiempo sobre (creadas - canceladas) */
   onTimePct: number;
   /** % entregadas fuera de tiempo sobre (creadas - canceladas) */
@@ -359,6 +369,8 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
   for (const ps of petshops) {
     const baseTotal = round0(180 + rnd() * 220);
     const transacciones = round0(baseTotal * (0.55 + rnd() * 0.2));
+    const avgTicket = 8500 + rnd() * 14000; // ARS, aproximación para mock
+    const gmv = round0(transacciones * avgTicket);
 
     const demSinDespachar = round0(baseTotal * (0.03 + rnd() * 0.06));
     const vuelta1 = round0(baseTotal * (0.03 + rnd() * 0.05));
@@ -382,6 +394,10 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
     const recurrentClients = Math.max(0, baseTotal - newClients);
     const newPct = clamp((newClients / Math.max(1, newClients + recurrentClients)) * 100, 0, 100);
     const recPct = 100 - newPct;
+    // En el modelo real esto debería venir del sistema de pagos/CRM.
+    // En el mock repartimos transacciones en la misma proporción que el split Nuevos/Recurrentes.
+    const newTransactions = Math.min(transacciones, round0(transacciones * (newClients / Math.max(1, newClients + recurrentClients))));
+    const recurrentTransactions = Math.max(0, transacciones - newTransactions);
 
     const eligible = Math.max(0, baseTotal - cancel);
     let delivered = round0(baseTotal * (0.86 + rnd() * 0.11)); // 86%..97% delivered (rough)
@@ -390,6 +406,9 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
     const lateShare = 0.04 + rnd() * 0.12; // 4%..16% of delivered are late
     const outTimeN = Math.min(delivered, round0(delivered * lateShare));
     const onTimeN = Math.max(0, delivered - outTimeN);
+    const onTimeRatio = onTimeN / Math.max(1, onTimeN + outTimeN);
+    const onTimeTx = Math.min(transacciones, round0(transacciones * onTimeRatio));
+    const outTimeTx = Math.max(0, transacciones - onTimeTx);
 
     const onTimePct = clamp((onTimeN / Math.max(1, eligible)) * 100, 0, 100);
     const outTimePct = clamp((outTimeN / Math.max(1, eligible)) * 100, 0, 100);
@@ -475,6 +494,7 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
       total: baseTotal,
       delivered,
       transacciones,
+      gmv,
       demSinDespachar,
       vuelta1,
       vuelta1pct,
@@ -489,8 +509,12 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
       recurrentClients,
       newPct,
       recPct,
+      newTransactions,
+      recurrentTransactions,
       onTimeN,
       outTimeN,
+      onTimeTx,
+      outTimeTx,
       onTimePct,
       outTimePct,
       slPct,
