@@ -42,6 +42,8 @@ export type CerradoManualRow = OpsRowBase & {
 export type CanceladoRow = OpsRowBase & {
   canceledAt: string; // ISO
   reason: string;
+  /** Monto estimado del pedido cancelado (ARS) */
+  amountArs: number;
 };
 
 export type TimelineBucket = {
@@ -704,6 +706,8 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
       const partido = pick(rnd, partidos);
       const address = `${pick(rnd, streets)} ${partido}`;
       const reason = pick(rnd, CANCELLATION_REASONS).label;
+      // Aproximamos el monto a partir del avg ticket del petshop (definido arriba).
+      const amountArs = round0(avgTicket * (0.65 + rnd() * 0.9)); // ~0.65x..1.55x
       canceladosRows.push({
         orderId: orderIdNumeric(round0(rnd() * 8000)),
         createdAt: createdAt.toISOString(),
@@ -715,6 +719,7 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
         petshopId: ps.id,
         petshopName: ps.name,
         reason,
+        amountArs,
       });
     }
 

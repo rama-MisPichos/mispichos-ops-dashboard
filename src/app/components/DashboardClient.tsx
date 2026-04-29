@@ -66,6 +66,11 @@ function formatPct0(n: number) {
   return `${round0(n)}%`;
 }
 
+function formatArs(n: number) {
+  if (!Number.isFinite(n)) return "—";
+  return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n);
+}
+
 function ymdToDateLocal(ymdStr: string) {
   // Interpretamos yyyy-mm-dd como fecha local (sin timezone) para que el calendario coincida con la UI.
   const [y, m, d] = ymdStr.split("-").map((x) => Number(x));
@@ -531,6 +536,151 @@ function LineMini({
           </text>
         </>
       ) : null}
+    </svg>
+  );
+}
+
+function LineHourly({
+  hourly,
+  limit,
+  color = "var(--info)",
+  nowHour,
+}: {
+  hourly: { hour: number; used: number }[];
+  limit: number;
+  color?: string;
+  nowHour?: number;
+}) {
+  const [hovered, setHovered] = useState<number | null>(null);
+
+  const w = 860;
+  const h = 140;
+  const padL = 6;
+  const padR = 6;
+  const padT = 14;
+  const padB = 20;
+  const innerW = w - padL - padR;
+  const innerH = h - padT - padB;
+
+  const maxY = Math.max(limit, ...hourly.map((p) => p.used), 1);
+
+  function xOf(hour: number) {
+    return padL + (hour / 23) * innerW;
+  }
+  function yOf(val: number) {
+    return padT + (1 - val / maxY) * innerH;
+  }
+
+  const linePath = hourly
+    .map((p, i) => `${i === 0 ? "M" : "L"}${xOf(p.hour).toFixed(1)},${yOf(p.used).toFixed(1)}`)
+    .join(" ");
+
+  const areaPath =
+    hourly.length > 0
+      ? `${linePath} L${xOf(hourly[hourly.length - 1].hour).toFixed(1)},${(padT + innerH).toFixed(1)} L${xOf(hourly[0].hour).toFixed(1)},${(padT + innerH).toFixed(1)} Z`
+      : "";
+
+  const yLimit = yOf(limit);
+  const labelHours = [0, 6, 10, 14, 18, 22];
+
+  const hoveredPoint = hovered !== null ? hourly[hovered] ?? null : null;
+
+  return (
+    <svg
+      className="lineMini"
+      viewBox={`0 0 ${w} ${h}`}
+      role="img"
+      aria-label="Hourly capacity chart"
+      style={{ overflow: "visible", cursor: "crosshair" }}
+      onMouseLeave={() => setHovered(null)}
+    >
+      <defs>
+        <linearGradient id={`areaGrad-${color.replace(/[^a-z0-9]/gi, "")}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.22" />
+          <stop offset="100%" stopColor={color} stopOpacity="0.01" />
+        </linearGradient>
+      </defs>
+
+      {/* baseline */}
+      <path d={`M${padL},${padT + innerH} L${w - padR},${padT + innerH}`} stroke="var(--border)" strokeWidth="1" fill="none" />
+
+      {/* limit line */}
+      <path d={`M${padL},${yLimit.toFixed(1)} L${w - padR},${yLimit.toFixed(1)}`} stroke="var(--bad)" strokeWidth="1.5" strokeDasharray="5 4" fill="none" />
+      <text x={w - padR - 2} y={yLimit - 5} textAnchor="end" fontSize="10" fill="var(--bad)" className="mono">
+        {round0(limit)}
+      </text>
+
+      {/* area fill */}
+      {areaPath && (
+        <path d={areaPath} fill={`url(#areaGrad-${color.replace(/[^a-z0-9]/gi, "")})`} />
+      )}
+
+      {/* line */}
+      <path d={linePath} stroke={color} strokeWidth="2.5" fill="none" strokeLinejoin="round" strokeLinecap="round" />
+
+      {/* current-hour marker */}
+      {nowHour !== undefined && (
+        <line
+          x1={xOf(nowHour).toFixed(1)}
+          y1={padT.toString()}
+          x2={xOf(nowHour).toFixed(1)}
+          y2={(padT + innerH).toFixed(1)}
+          stroke="var(--muted)"
+          strokeWidth="1"
+          strokeDasharray="3 3"
+          opacity="0.6"
+        />
+      )}
+
+      {/* X-axis hour labels */}
+      {labelHours.map((lh) => (
+        <text key={lh} x={xOf(lh).toFixed(1)} y={(padT + innerH + 13).toFixed(1)} textAnchor="middle" fontSize="9" fill="var(--muted)" className="mono">
+          {String(lh).padStart(2, "0")}h
+        </text>
+      ))}
+
+      {/* invisible hover strips */}
+      {hourly.map((p, i) => {
+        const x0 = i === 0 ? padL : (xOf(hourly[i - 1].hour) + xOf(p.hour)) / 2;
+        const x1 = i === hourly.length - 1 ? w - padR : (xOf(p.hour) + xOf(hourly[i + 1].hour)) / 2;
+        return (
+          <rect
+            key={p.hour}
+            x={x0}
+            y={padT}
+            width={x1 - x0}
+            height={innerH}
+            fill="transparent"
+            onMouseEnter={() => setHovered(i)}
+          />
+        );
+      })}
+
+      {/* hover dot + tooltip */}
+      {hoveredPoint && (
+        <>
+          <circle cx={xOf(hoveredPoint.hour).toFixed(1)} cy={yOf(hoveredPoint.used).toFixed(1)} r="4" fill={color} />
+          <circle cx={xOf(hoveredPoint.hour).toFixed(1)} cy={yOf(hoveredPoint.used).toFixed(1)} r="7" fill={color} opacity="0.18" />
+          {(() => {
+            const tx = xOf(hoveredPoint.hour);
+            const ty = yOf(hoveredPoint.used);
+            const pctVal = limit > 0 ? Math.round((hoveredPoint.used / limit) * 100) : 0;
+            const label1 = `${String(hoveredPoint.hour).padStart(2, "0")}:00 · ${round0(hoveredPoint.used)}`;
+            const label2 = `${pctVal}% usado`;
+            const boxW = 102;
+            const boxH = 32;
+            const bx = Math.min(Math.max(tx - boxW / 2, padL), w - padR - boxW);
+            const by = ty - boxH - 10;
+            return (
+              <g>
+                <rect x={bx} y={by} width={boxW} height={boxH} rx="5" fill="var(--surface)" stroke="var(--border)" strokeWidth="0.75" opacity="0.97" />
+                <text x={bx + boxW / 2} y={by + 12} textAnchor="middle" fontSize="10" fill="var(--fg)" className="mono" fontWeight="600">{label1}</text>
+                <text x={bx + boxW / 2} y={by + 24} textAnchor="middle" fontSize="9" fill="var(--muted)">{label2}</text>
+              </g>
+            );
+          })()}
+        </>
+      )}
     </svg>
   );
 }
@@ -1005,6 +1155,10 @@ export default function DashboardClient() {
     return rows.filter((r) => r.petshopId === petshopId);
   }, [data, petshopId]);
 
+  const totalCanceladosArs = useMemo(() => {
+    return canceladosRows.reduce((acc, r) => acc + (Number.isFinite(r.amountArs) ? r.amountArs : 0), 0);
+  }, [canceladosRows]);
+
   const reprogramarRowsSorted = useMemo(() => {
     return reprogramarRows.slice().sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()); // más antiguos arriba
   }, [reprogramarRows]);
@@ -1329,6 +1483,8 @@ export default function DashboardClient() {
   const [quickAccessOpen, setQuickAccessOpen] = useState(false);
   const qaDockStorageKey = "opsQuickAccess:dockOpen:v1";
   const [qaDockOpen, setQaDockOpen] = useState(false);
+  const [qaAnimClass, setQaAnimClass] = useState<"qaEntering" | "qaExiting" | "">("");
+  const qaTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [shortCapacityOpen, setShortCapacityOpen] = useState(false);
   const [flexCapacityOpen, setFlexCapacityOpen] = useState(false);
   const [recordsModal, setRecordsModal] = useState<null | "reprogramar" | "sinDespachar" | "cerradosManual" | "cancelados">(null);
@@ -1446,6 +1602,31 @@ export default function DashboardClient() {
 
   function toggleFavorite(id: string) {
     setFavoriteIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  function openQaSidebar() {
+    if (qaTimerRef.current) clearTimeout(qaTimerRef.current);
+    setQaDockOpen(true);
+    setQaAnimClass("qaEntering");
+    qaTimerRef.current = setTimeout(() => {
+      setQaAnimClass("");
+      qaTimerRef.current = null;
+    }, 320);
+  }
+
+  function closeQaSidebar() {
+    if (qaTimerRef.current) clearTimeout(qaTimerRef.current);
+    setQaAnimClass("qaExiting");
+    qaTimerRef.current = setTimeout(() => {
+      setQaDockOpen(false);
+      setQaAnimClass("");
+      qaTimerRef.current = null;
+    }, 210);
+  }
+
+  function toggleQaSidebar() {
+    if (qaDockOpen) closeQaSidebar();
+    else openQaSidebar();
   }
 
   useEffect(() => {
@@ -1914,6 +2095,20 @@ export default function DashboardClient() {
       ) : null}
 
       <div className={`topbar ${topbarHidden ? "topbarHidden" : ""}`}>
+        <button
+          type="button"
+          className={`qaToggleBtn ${qaDockOpen ? "isOpen" : ""}`}
+          onClick={toggleQaSidebar}
+          aria-label={qaDockOpen ? "Ocultar accesos" : "Mostrar accesos"}
+          title={qaDockOpen ? "Ocultar accesos" : "Mostrar accesos"}
+        >
+          <svg width="16" height="12" viewBox="0 0 16 12" fill="none" aria-hidden="true">
+            <rect x="0" y="0" width="4" height="12" rx="1.5" fill="currentColor" style={{ transition: "opacity 200ms ease", opacity: qaDockOpen ? 1 : 0.35 }} />
+            <rect x="6.5" y="1" width="9.5" height="1.8" rx="0.9" fill="currentColor" opacity="0.45" />
+            <rect x="6.5" y="5.1" width="7.5" height="1.8" rx="0.9" fill="currentColor" opacity="0.45" />
+            <rect x="6.5" y="9.2" width="8.5" height="1.8" rx="0.9" fill="currentColor" opacity="0.45" />
+          </svg>
+        </button>
         <div className="title">
           <h1>Operaciones · MisPichos</h1>
           <p className="topbarMeta">
@@ -1922,15 +2117,17 @@ export default function DashboardClient() {
           </p>
         </div>
         <div className="chipRow">
-          <button
-            type="button"
-            className="btn quickAccessMobileBtn"
-            onClick={() => (isMobile ? setQuickAccessOpen(true) : setQaDockOpen((v) => !v))}
-            aria-label={isMobile ? "Abrir accesos" : qaDockOpen ? "Ocultar accesos" : "Mostrar accesos"}
-            title={isMobile ? "Accesos" : qaDockOpen ? "Ocultar accesos" : "Mostrar accesos"}
-          >
-            {isMobile ? "Accesos" : qaDockOpen ? "Accesos ▾" : "Accesos ▸"}
-          </button>
+          {isMobile && (
+            <button
+              type="button"
+              className="btn quickAccessMobileBtn"
+              onClick={() => setQuickAccessOpen(true)}
+              aria-label="Abrir accesos"
+              title="Accesos"
+            >
+              Accesos
+            </button>
+          )}
           <label className="chip">
             <span>Petshop</span>
             <select className="selectInput" value={petshopId} onChange={(e) => setPetshopId(e.target.value)}>
@@ -2030,11 +2227,11 @@ export default function DashboardClient() {
       ) : null}
 
       <div className={`dashboardLayout ${qaDockOpen ? "" : "qaClosed"}`}>
-        <aside className="quickAccess" aria-label="Accesos rápidos">
+        <aside className={`quickAccess ${qaAnimClass}`} aria-label="Accesos rápidos">
           <div className="quickAccessCard">
             <div className="quickAccessTitleRow">
               <div className="quickAccessTitle">Accesos</div>
-              <button type="button" className="btn btnIcon quickAccessClose" onClick={() => setQaDockOpen(false)} aria-label="Cerrar accesos" title="Cerrar">
+              <button type="button" className="btn btnIcon quickAccessClose" onClick={closeQaSidebar} aria-label="Cerrar accesos" title="Cerrar">
                 ×
               </button>
             </div>
@@ -2637,27 +2834,52 @@ export default function DashboardClient() {
               const prev = previousFromDelta(totalCancel, d);
               const cancelPct = metricsSelected?.cancelPct ?? null;
               return (
-                <div
-                  className={`kpiMiniBox ${deltaBgClass(deltaBgTone(d, KPI_DELTA_BG.cancel.mode, KPI_DELTA_BG.cancel.neutralAbsPct))}`}
-                  style={{ marginTop: 10 }}
-                  aria-label="Total cancelados"
-                >
-                  <div className="kpiMiniLabel">Total cancelados</div>
-                  <div className="kpiMiniRow">
-                    <div className="kpiMiniValue mono">{totalCancel.toLocaleString("es-AR")}</div>
-                    <div className="kpiMiniDelta">{prev != null ? <DeltaPill deltaPct={d} mode="lower_better" /> : <span className="sub">—</span>}</div>
+                <>
+                  <div
+                    className={`kpiMiniBox ${deltaBgClass(deltaBgTone(d, KPI_DELTA_BG.cancel.mode, KPI_DELTA_BG.cancel.neutralAbsPct))}`}
+                    style={{ marginTop: 10 }}
+                    aria-label="Total cancelados"
+                  >
+                    <div className="kpiMiniLabel">Total cancelados</div>
+                    <div className="kpiMiniRow">
+                      <div className="kpiMiniValue mono">{totalCancel.toLocaleString("es-AR")}</div>
+                      <div className="kpiMiniDelta">{prev != null ? <DeltaPill deltaPct={d} mode="lower_better" /> : <span className="sub">—</span>}</div>
+                    </div>
+                    <div className="sub" style={{ marginTop: 3 }}>
+                      {prev != null ? (
+                        <>
+                          <span className="mono">Ayer: {round0(prev).toLocaleString("es-AR")}</span>
+                          {cancelPct != null ? <span style={{ marginLeft: 10 }}>· {formatPct0(cancelPct)} del total</span> : null}
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                    </div>
                   </div>
-                  <div className="sub" style={{ marginTop: 3 }}>
-                    {prev != null ? (
-                      <>
-                        <span className="mono">Ayer: {round0(prev).toLocaleString("es-AR")}</span>
-                        {cancelPct != null ? <span style={{ marginLeft: 10 }}>· {formatPct0(cancelPct)} del total</span> : null}
-                      </>
-                    ) : (
-                      "—"
-                    )}
-                  </div>
-                </div>
+
+                  {(() => {
+                    const dMoney = stableDeltaPctFor(`${petshopId}|${from}|${to}|cancel_ars`);
+                    const prevMoney = previousFromDelta(totalCanceladosArs, dMoney);
+                    return (
+                      <div
+                        className={`kpiMiniBox ${deltaBgClass(deltaBgTone(dMoney, KPI_DELTA_BG.cancel.mode, KPI_DELTA_BG.cancel.neutralAbsPct))}`}
+                        style={{ marginTop: 10 }}
+                        aria-label="Total $$ cancelados"
+                      >
+                        <div className="kpiMiniLabel">Total $$ cancelados</div>
+                        <div className="kpiMiniRow">
+                          <div className="kpiMiniValue mono">{formatArs(totalCanceladosArs)}</div>
+                          <div className="kpiMiniDelta">
+                            {prevMoney != null ? <DeltaPill deltaPct={dMoney} mode="lower_better" /> : <span className="sub">—</span>}
+                          </div>
+                        </div>
+                        <div className="sub" style={{ marginTop: 3 }}>
+                          {prevMoney != null ? <span className="mono">Ayer: {formatArs(prevMoney)}</span> : "—"}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </>
               );
             })()}
           </div>
