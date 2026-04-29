@@ -848,6 +848,7 @@ export default function DashboardClient() {
   const [sinDespacharPage, setSinDespacharPage] = useState(0);
   const [cerradosManualPage, setCerradosManualPage] = useState(0);
   const [canceladosPage, setCanceladosPage] = useState(0);
+  const [capDayOffset, setCapDayOffset] = useState(0); // 0=hoy ... 6=+6 días
 
   useEffect(() => {
     let cancelled = false;
@@ -1238,10 +1239,11 @@ export default function DashboardClient() {
       .filter((m0) => psById.has(m0.petshopId))
       .map((m0) => {
         const ps = psById.get(m0.petshopId)!;
-        const used1014 = sumHours(m0.capacityFranjaHourly, 10, 14);
-        const used1418 = sumHours(m0.capacityFranjaHourly, 14, 18);
-        const used1822 = sumHours(m0.capacityFranjaHourly, 18, 22);
-        const flex1422 = sumHours(m0.capacityFlexHourly, 14, 22);
+        const assigned = m0.capacityAssignedNext7?.find((x) => x.dayOffset === capDayOffset) ?? null;
+        const used1014 = assigned ? assigned.shortUsed1014 ?? 0 : sumHours(m0.capacityFranjaHourly, 10, 14);
+        const used1418 = assigned ? assigned.shortUsed1418 ?? 0 : sumHours(m0.capacityFranjaHourly, 14, 18);
+        const used1822 = assigned ? assigned.shortUsed1822 ?? 0 : sumHours(m0.capacityFranjaHourly, 18, 22);
+        const flex1422 = assigned ? assigned.flexUsed1422 ?? 0 : sumHours(m0.capacityFlexHourly, 14, 22);
         return {
           id: m0.petshopId,
           label: m0.petshopName,
@@ -1249,11 +1251,15 @@ export default function DashboardClient() {
           used1418,
           used1822,
           flex1422,
-          limits: ps.capacity,
+          limits: {
+            ...ps.capacity,
+            flexEnabled: assigned ? assigned.flexEnabled : ps.capacity.flexEnabled,
+            shortEnabled: assigned ? assigned.shortEnabled : ps.capacity.shortEnabled,
+          },
         };
       })
       .sort((a, b) => (b.used1014 + b.used1418 + b.used1822) - (a.used1014 + a.used1418 + a.used1822));
-  }, [data]);
+  }, [capDayOffset, data]);
 
   const shortCapacityRows = useMemo(() => {
     return capacityByPetshop.map((p0) => {
@@ -1333,6 +1339,13 @@ export default function DashboardClient() {
   const themeStorageKey = "opsTheme:v1";
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
+  const capDayLabel = useMemo(() => {
+    const base = data?.now ? new Date(data.now) : new Date();
+    const d0 = addDaysLocal(base, capDayOffset);
+    const prefix = capDayOffset === 0 ? "Hoy" : capDayOffset === 1 ? "Mañana" : `+${capDayOffset}d`;
+    return `${prefix} · ${d0.toLocaleDateString("es-AR", { weekday: "short", day: "2-digit", month: "2-digit" })}`;
+  }, [capDayOffset, data?.now]);
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem(favoritesStorageKey);
@@ -1387,6 +1400,10 @@ export default function DashboardClient() {
     const delta = (r01 - 0.4) * 20;
     setTotalDeltaPct(delta);
   }, [metricsSelected, petshopId, from, to]);
+
+  useEffect(() => {
+    setCapDayOffset(0);
+  }, [petshopId, from, to]);
 
   const quickAccessByTopic = useMemo(() => {
     const map = new Map<string, QuickAccessItem[]>();
@@ -3156,8 +3173,38 @@ export default function DashboardClient() {
         <div className="twoCol">
           <div className="miniCard">
             <div className="miniHeader">
-              <div className="miniTitle">Flex (14–22) por petshop</div>
-              <div className="sub">% de uso por petshop (usado / capacidad)</div>
+              <div className="capHeaderGrid">
+                <div className="capHeaderLeft">
+                  <div className="miniTitle">Flex (14–22) por petshop</div>
+                  <div className="sub">% de uso por petshop (usado / capacidad)</div>
+                </div>
+                <div className="capDayStepper" aria-label="Selector de día">
+                  <button
+                    type="button"
+                    className="btn btnIcon"
+                    onClick={() => setCapDayOffset((d) => Math.max(0, d - 1))}
+                    disabled={capDayOffset <= 0}
+                    aria-label="Día anterior"
+                    title="Anterior"
+                  >
+                    ←
+                  </button>
+                  <div className="capDayLabel" title={capDayLabel}>
+                    <div className="capDayTop mono">{capDayOffset === 0 ? "Hoy" : capDayOffset === 1 ? "Mañana" : `+${capDayOffset}d`}</div>
+                    <div className="capDayBottom mono">{capDayLabel.split(" · ")[1] ?? capDayLabel}</div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btnIcon"
+                    onClick={() => setCapDayOffset((d) => Math.min(5, d + 1))}
+                    disabled={capDayOffset >= 5}
+                    aria-label="Día siguiente"
+                    title="Siguiente"
+                  >
+                    →
+                  </button>
+                </div>
+              </div>
             </div>
             {flexCapacityPctRows.length ? (
               <>
@@ -3176,7 +3223,7 @@ export default function DashboardClient() {
                         </div>
                         <div className="shortUtilCell">
                           {r.flexEnabled ? (
-                            <div className={`shortUtilBar ${nearCapacityPctClass(r.pct0)}`} style={{ ["--c" as never]: "var(--capFlex)", ["--p" as never]: `${clamp(r.pct0, 0, 100)}%` }}>
+                            <div className={`shortUtilBar ${nearCapacityPctClass(r.pct0)}`} style={{ ["--c" as never]: "var(--ok)", ["--p" as never]: `${clamp(r.pct0, 0, 100)}%` }}>
                               {r.pct0}%
                             </div>
                           ) : (
@@ -3189,6 +3236,9 @@ export default function DashboardClient() {
                     ))}
                   </div>
                 </button>
+                <button type="button" className="capHint capHintBtn" onClick={() => setFlexCapacityOpen(true)}>
+                  Presioná para ver cantidades exactas
+                </button>
               </>
             ) : (
               <div className="sub">—</div>
@@ -3197,8 +3247,38 @@ export default function DashboardClient() {
 
           <div className="miniCard">
             <div className="miniHeader">
-              <div className="miniTitle">Franja corta por petshop</div>
-              <div className="sub">% de uso por franja (usado / capacidad por ventana)</div>
+              <div className="capHeaderGrid">
+                <div className="capHeaderLeft">
+                  <div className="miniTitle">Franja corta por petshop</div>
+                  <div className="sub">% de uso por franja (usado / cap.)</div>
+                </div>
+                <div className="capDayStepper" aria-label="Selector de día">
+                  <button
+                    type="button"
+                    className="btn btnIcon"
+                    onClick={() => setCapDayOffset((d) => Math.max(0, d - 1))}
+                    disabled={capDayOffset <= 0}
+                    aria-label="Día anterior"
+                    title="Anterior"
+                  >
+                    ←
+                  </button>
+                  <div className="capDayLabel" title={capDayLabel}>
+                    <div className="capDayTop mono">{capDayOffset === 0 ? "Hoy" : capDayOffset === 1 ? "Mañana" : `+${capDayOffset}d`}</div>
+                    <div className="capDayBottom mono">{capDayLabel.split(" · ")[1] ?? capDayLabel}</div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btnIcon"
+                    onClick={() => setCapDayOffset((d) => Math.min(5, d + 1))}
+                    disabled={capDayOffset >= 5}
+                    aria-label="Día siguiente"
+                    title="Siguiente"
+                  >
+                    →
+                  </button>
+                </div>
+              </div>
             </div>
             {shortCapacityPctRows.length ? (
               <>
@@ -3222,23 +3302,26 @@ export default function DashboardClient() {
                           {r.label}
                         </div>
                         <div className="shortUtilCell">
-                          <div className={`shortUtilBar ${nearCapacityPctClass(r.p1014)}`} style={{ ["--c" as never]: "var(--cap1014)", ["--p" as never]: `${clamp(r.p1014, 0, 100)}%` }}>
+                          <div className={`shortUtilBar ${nearCapacityPctClass(r.p1014)}`} style={{ ["--c" as never]: "var(--ok)", ["--p" as never]: `${clamp(r.p1014, 0, 100)}%` }}>
                             {r.shortEnabled["10-14"] ? `${r.p1014}%` : "OFF"}
                           </div>
                         </div>
                         <div className="shortUtilCell">
-                          <div className={`shortUtilBar ${nearCapacityPctClass(r.p1418)}`} style={{ ["--c" as never]: "var(--cap1418)", ["--p" as never]: `${clamp(r.p1418, 0, 100)}%` }}>
+                          <div className={`shortUtilBar ${nearCapacityPctClass(r.p1418)}`} style={{ ["--c" as never]: "var(--ok)", ["--p" as never]: `${clamp(r.p1418, 0, 100)}%` }}>
                             {r.shortEnabled["14-18"] ? `${r.p1418}%` : "OFF"}
                           </div>
                         </div>
                         <div className="shortUtilCell">
-                          <div className={`shortUtilBar ${nearCapacityPctClass(r.p1822)}`} style={{ ["--c" as never]: "var(--cap1822)", ["--p" as never]: `${clamp(r.p1822, 0, 100)}%` }}>
+                          <div className={`shortUtilBar ${nearCapacityPctClass(r.p1822)}`} style={{ ["--c" as never]: "var(--ok)", ["--p" as never]: `${clamp(r.p1822, 0, 100)}%` }}>
                             {r.shortEnabled["18-22"] ? `${r.p1822}%` : "OFF"}
                           </div>
                         </div>
                       </div>
                     ))}
                   </div>
+                </button>
+                <button type="button" className="capHint capHintBtn" onClick={() => setShortCapacityOpen(true)}>
+                  Presioná para ver cantidades exactas
                 </button>
               </>
             ) : (
@@ -3251,7 +3334,7 @@ export default function DashboardClient() {
           <div className="qaModal" role="dialog" aria-modal="true" aria-label="Franja corta · usado vs capacidad">
             <div className="qaModalPanel">
               <div className="qaModalHeader">
-                <div className="qaModalTitle">Franja corta · usado vs capacidad</div>
+                <div className="qaModalTitle">Franja corta · usado vs capacidad · {capDayLabel}</div>
                 <button type="button" className="btn btnIcon" onClick={() => setShortCapacityOpen(false)} aria-label="Cerrar">
                   ✕
                 </button>
@@ -3292,7 +3375,7 @@ export default function DashboardClient() {
           <div className="qaModal" role="dialog" aria-modal="true" aria-label="Flex (14–22) · usado vs capacidad">
             <div className="qaModalPanel">
               <div className="qaModalHeader">
-                <div className="qaModalTitle">Flex (14–22) · usado vs capacidad</div>
+                <div className="qaModalTitle">Flex (14–22) · usado vs capacidad · {capDayLabel}</div>
                 <button type="button" className="btn btnIcon" onClick={() => setFlexCapacityOpen(false)} aria-label="Cerrar">
                   ✕
                 </button>

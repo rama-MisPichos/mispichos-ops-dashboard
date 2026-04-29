@@ -276,7 +276,7 @@ html[data-theme] *{
   z-index: 50;
   background: rgba(0,0,0,0.45);
   display:flex;
-  align-items:flex-end;
+  align-items:center;
   justify-content:center;
   padding: 12px;
   overflow-x: hidden;
@@ -285,7 +285,7 @@ html[data-theme] *{
 .qaModalPanel{
   width: min(520px, 100%);
   max-width: 100%;
-  max-height: 82vh;
+  max-height: min(82vh, 720px);
   overflow:auto;
   overflow-x: hidden;
   background: var(--surface);
@@ -1307,6 +1307,79 @@ html[data-theme] *{
     linear-gradient(90deg, color-mix(in srgb, var(--bad) 70%, transparent) 0 var(--p), color-mix(in srgb, var(--surface2) 70%, var(--surface)) var(--p) 100%);
   color: color-mix(in srgb, var(--bad) 85%, var(--text));
   font-weight: 700;
+}
+
+/* Selector de día (capacidad futura) */
+.capHeaderGrid{
+  display:grid;
+  grid-template-columns: 1fr auto;
+  align-items:center;
+  gap: 10px;
+  width: 100%;
+}
+
+.capHeaderLeft{
+  min-width: 0;
+}
+
+.capHeaderGrid .sub{
+  margin: 6px 0 0 0;
+}
+
+.capDayStepper{
+  display:flex;
+  align-items:center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+  justify-self: end;
+}
+
+.capDayLabel{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  min-width: 72px;
+  line-height: 1.05;
+}
+
+.capDayTop{
+  font-size: 11px;
+  font-weight: 750;
+  color: var(--text);
+}
+
+.capDayBottom{
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.capHint{
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  letter-spacing: .12px;
+  min-height: 16px; /* ayuda a que ambas cards calcen igual */
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.capHintBtn{
+  width: 100%;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.capHintBtn:hover{
+  color: color-mix(in srgb, var(--text) 55%, var(--muted));
 }
 
 .utilChipLabel{

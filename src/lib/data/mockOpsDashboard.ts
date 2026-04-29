@@ -137,6 +137,21 @@ export type PetshopMetrics = {
   capacityFranjaHourly: CapacityHourBucket[];
   capacityFlexDaily: CapacityDayBucket[];
   capacityFranjaDaily: CapacityDayBucket[];
+
+  /**
+   * Asignaciones ya hechas por día (hoy + próximos 5 días).
+   * Representa pedidos ya “reservados” para una franja futura.
+   */
+  capacityAssignedNext7: {
+    dayOffset: number; // 0 = hoy, 1 = mañana, ...
+    t: string; // ISO day start (local)
+    flexEnabled: boolean;
+    shortEnabled: { "10-14": boolean; "14-18": boolean; "18-22": boolean };
+    flexUsed1422: number;
+    shortUsed1014: number;
+    shortUsed1418: number;
+    shortUsed1822: number;
+  }[];
 };
 
 export type OpsDashboardResponse = {
@@ -503,6 +518,79 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
       return { t: iso(startOfDay(d0)), used };
     });
 
+    // Asignaciones futuras (hoy + 5 días). Para "hoy" usamos lo mismo que el hourly,
+    // y para días futuros generamos reservas con tendencia a ser menores cuanto más lejos.
+    const capacityAssignedNext7 = Array.from({ length: 6 }, (_, dayOffset) => {
+      const t = iso(startOfDay(addDays(now, dayOffset)));
+      if (dayOffset === 0) {
+        return {
+          dayOffset,
+          t,
+          flexEnabled: ps.capacity.flexEnabled,
+          shortEnabled: ps.capacity.shortEnabled,
+          flexUsed1422: usedFlexTotal,
+          shortUsed1014: used1014,
+          shortUsed1418: used1418,
+          shortUsed1822: used1822,
+        };
+      }
+
+      // En la práctica, cuanto más futuro, menos reservas (y puede haber ventanas apagadas por día).
+      const flexEnabledDay = ps.capacity.flexEnabled ? rnd() > (0.08 + dayOffset * 0.04) : false; // más lejos, más chance de OFF
+      const shortEnabledDay = {
+        "10-14": ps.capacity.shortEnabled["10-14"] ? rnd() > (0.06 + dayOffset * 0.035) : false,
+        "14-18": ps.capacity.shortEnabled["14-18"] ? rnd() > (0.06 + dayOffset * 0.035) : false,
+        "18-22": ps.capacity.shortEnabled["18-22"] ? rnd() > (0.06 + dayOffset * 0.035) : false,
+      };
+
+      const enabledShortWinsDay = (["10-14", "14-18", "18-22"] as const).filter((w) => shortEnabledDay[w]);
+      const shortLimitTotalDay = shortLimitPerWindow * enabledShortWinsDay.length;
+
+      // Reservas futuras graduales (realista):
+      // hoy suele ser el día más cargado; mañana un poco menos; y va bajando.
+      // Usamos el "hoy" como baseline (usedShortTotal / usedFlexTotal) y aplicamos un factor decreciente.
+      const decayByOffset = [1, 0.86, 0.72, 0.58, 0.45, 0.34][dayOffset] ?? 0.34;
+      const jitter = 0.88 + rnd() * 0.22; // 88%..110% (variación suave)
+
+      // Si se apagan ventanas para ese día, el total potencial baja con ellas.
+      const dayShortBaseline = Math.max(0, usedShortTotal);
+      const dayFlexBaseline = Math.max(0, usedFlexTotal);
+
+      const futureShortTotalRaw = round0(dayShortBaseline * decayByOffset * jitter);
+      const futureFlexTotalRaw = round0(dayFlexBaseline * decayByOffset * jitter);
+
+      const futureShortTotal = shortLimitTotalDay ? Math.min(shortLimitTotalDay, Math.max(0, futureShortTotalRaw)) : 0;
+      const futureFlexTotal = flexEnabledDay && flexLimit ? Math.min(flexLimit, Math.max(0, futureFlexTotalRaw)) : 0;
+
+      // Distribución por ventana: preservamos proporciones del "hoy" (si están habilitadas),
+      // y renormalizamos dentro de las ventanas habilitadas del día.
+      const baseShares = {
+        "10-14": used1014,
+        "14-18": used1418,
+        "18-22": used1822,
+      } as const;
+      const enabledSharesSum = enabledShortWinsDay.reduce((acc, w) => acc + (baseShares[w] ?? 0), 0);
+      const weights = enabledShortWinsDay.map((w) => {
+        if (enabledSharesSum <= 0) return 1;
+        return Math.max(0.2, (baseShares[w] ?? 0) / enabledSharesSum);
+      });
+      const futureByWin = enabledShortWinsDay.length ? distributeByWeights(futureShortTotal, weights, rnd) : [];
+      const f1014 = enabledShortWinsDay.includes("10-14") ? futureByWin[enabledShortWinsDay.indexOf("10-14")] ?? 0 : 0;
+      const f1418 = enabledShortWinsDay.includes("14-18") ? futureByWin[enabledShortWinsDay.indexOf("14-18")] ?? 0 : 0;
+      const f1822 = enabledShortWinsDay.includes("18-22") ? futureByWin[enabledShortWinsDay.indexOf("18-22")] ?? 0 : 0;
+
+      return {
+        dayOffset,
+        t,
+        flexEnabled: flexEnabledDay,
+        shortEnabled: shortEnabledDay,
+        flexUsed1422: futureFlexTotal,
+        shortUsed1014: f1014,
+        shortUsed1418: f1418,
+        shortUsed1822: f1822,
+      };
+    });
+
     metricsByPetshop.push({
       petshopId: ps.id,
       petshopName: ps.name,
@@ -543,6 +631,7 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
       capacityFranjaHourly,
       capacityFlexDaily,
       capacityFranjaDaily,
+      capacityAssignedNext7,
     });
 
     // rows (bounded so UI isn't huge)
