@@ -970,6 +970,29 @@ html[data-theme] *{
   margin: -4px 0 10px;
 }
 
+.sectionToolbarTop{
+  justify-content:space-between;
+  align-items:flex-end;
+  gap: 12px;
+  margin: 0 0 10px;
+}
+
+.sectionToolbarTitle{
+  min-width: 0;
+}
+
+.sectionToolbarTitle h2{
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.sectionToolbarTitle p{
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
 .dtRange{
   display:flex;
   align-items:center;
@@ -1072,7 +1095,7 @@ html[data-theme] *{
 }
 
 .top3{ display:flex; flex-direction:column; gap: 10px; }
-.top3Item{ display:grid; grid-template-columns: 30px 1fr 60px; gap: 10px; align-items:center; }
+.top3Item{ display:grid; grid-template-columns: 30px 1fr 72px; gap: 10px; align-items:center; }
 .rankCircle{
   width: 26px;
   height: 26px;
@@ -1088,8 +1111,14 @@ html[data-theme] *{
 .rankCircle[data-rank="1"]{ background: var(--okBg); color: color-mix(in srgb, var(--ok) 85%, var(--text)); }
 .rankCircle[data-rank="2"]{ background: var(--warnBg); color: color-mix(in srgb, var(--warn) 85%, var(--text)); }
 .rankCircle[data-rank="3"]{ background: var(--badBg); color: color-mix(in srgb, var(--bad) 85%, var(--text)); }
-.top3Name{ font-size: 11px; font-weight: 500; color: var(--text); margin-bottom: 6px; }
-.top3Pct{ font-size: 11px; text-align:right; color: var(--muted); }
+.top3Name{ font-size: 11px; font-weight: 600; color: var(--text); }
+.top3NameRow{ display:flex; align-items:baseline; justify-content:space-between; gap: 10px; margin-bottom: 6px; }
+.top3Share{
+  font-size: 11px;
+  font-weight: 750;
+  color: color-mix(in srgb, var(--info) 85%, var(--text));
+}
+.top3Right{ font-size: 11px; text-align:right; color: var(--muted); }
 .top3MetaRow{
   margin-top: 8px;
   display:flex;
@@ -1381,6 +1410,31 @@ html[data-theme] *{
 .capHintBtn:hover{
   color: color-mix(in srgb, var(--text) 55%, var(--muted));
 }
+
+.recordsHint{
+  margin: -2px 0 10px;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: left;
+  letter-spacing: .12px;
+}
+
+.recordsHintInline{
+  margin: 0;
+  white-space: nowrap;
+  background: transparent;
+  border: 0;
+  padding: 0 6px;
+  height: 28px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.recordsHintInline:hover{
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  color: color-mix(in srgb, var(--text) 55%, var(--muted));
+}
+
 
 .utilChipLabel{
   color: var(--muted);

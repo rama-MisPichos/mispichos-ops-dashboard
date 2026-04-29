@@ -1331,6 +1331,7 @@ export default function DashboardClient() {
   const [qaDockOpen, setQaDockOpen] = useState(false);
   const [shortCapacityOpen, setShortCapacityOpen] = useState(false);
   const [flexCapacityOpen, setFlexCapacityOpen] = useState(false);
+  const [recordsModal, setRecordsModal] = useState<null | "reprogramar" | "sinDespachar" | "cerradosManual" | "cancelados">(null);
   const [topbarHidden, setTopbarHidden] = useState(false);
   const lastScrollYRef = useRef(0);
   const rafRef = useRef<number | null>(null);
@@ -1404,6 +1405,18 @@ export default function DashboardClient() {
   useEffect(() => {
     setCapDayOffset(0);
   }, [petshopId, from, to]);
+
+  useEffect(() => {
+    // Cuando hay un modal abierto, bloqueamos el scroll/interacción del dashboard.
+    const anyModalOpen = quickAccessOpen || shortCapacityOpen || flexCapacityOpen || recordsModal != null;
+    if (!anyModalOpen) return;
+
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [flexCapacityOpen, quickAccessOpen, recordsModal, shortCapacityOpen]);
 
   const quickAccessByTopic = useMemo(() => {
     const map = new Map<string, QuickAccessItem[]>();
@@ -2258,14 +2271,17 @@ export default function DashboardClient() {
                   ) : (
                     <>
                       <div className="top3Main">
-                        <div className="top3Name">{t0.petshopName}</div>
+                        <div className="top3NameRow">
+                          <div className="top3Name">{t0.petshopName}</div>
+                          <div className="top3Share mono">{formatPct0(t0.pct)}</div>
+                        </div>
                         <div className="bar" aria-hidden="true">
                           <div style={{ width: `${clamp(t0.pct, 0, 100)}%`, background: "var(--info)" }} />
                         </div>
                       </div>
-                      <div className="top3Pct">
-                        <div className="mono">{formatPct0(t0.pct)}</div>
-                        <div className="sub mono">{t0.orders.toLocaleString("es-AR")} pedidos</div>
+                      <div className="top3Right">
+                        <div className="mono">{t0.orders.toLocaleString("es-AR")}</div>
+                        <div className="sub mono">pedidos</div>
                       </div>
                     </>
                   )}
@@ -2284,14 +2300,15 @@ export default function DashboardClient() {
       </section>
 
       <section className="section" id="reprogramar">
-        <div className="sectionHeader">
-          <div>
+        <div className="sectionToolbar sectionToolbarTop">
+          <div className="sectionToolbarTitle">
             <h2>Pedidos a reprogramar</h2>
             <p>Superaron 48hs sin gestión</p>
           </div>
-        </div>
-        <div className="sectionToolbar">
           <div className="sectionActions">
+            <button type="button" className="recordsHint recordsHintInline" onClick={() => setRecordsModal("reprogramar")}>
+              Presioná registros (más info)
+            </button>
             <div className="pager">
               <button
                 className="btn btnIcon"
@@ -2377,7 +2394,16 @@ export default function DashboardClient() {
             </button>
           </div>
         </div>
-        <div className="tableScroll">
+        <div
+          className="tableScroll"
+          role="button"
+          tabIndex={0}
+          aria-label="Abrir modal con todos los pedidos a reprogramar"
+          onClick={() => setRecordsModal("reprogramar")}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") setRecordsModal("reprogramar");
+          }}
+        >
           <table className="tableFixed">
             <colgroup>
               <col style={{ width: "92px" }} />
@@ -2419,14 +2445,15 @@ export default function DashboardClient() {
       </section>
 
       <section className="section" id="sin-despachar">
-        <div className="sectionHeader">
-          <div>
+        <div className="sectionToolbar sectionToolbarTop">
+          <div className="sectionToolbarTitle">
             <h2>Demorado sin despachar</h2>
             <p>Etiqueta impresa &gt;24hs sin driver</p>
           </div>
-        </div>
-        <div className="sectionToolbar">
           <div className="sectionActions">
+            <button type="button" className="recordsHint recordsHintInline" onClick={() => setRecordsModal("sinDespachar")}>
+              Presioná registros (más info)
+            </button>
             <div className="pager">
               <button
                 className="btn btnIcon"
@@ -2513,7 +2540,16 @@ export default function DashboardClient() {
             </button>
           </div>
         </div>
-        <div className="tableScroll">
+        <div
+          className="tableScroll"
+          role="button"
+          tabIndex={0}
+          aria-label="Abrir modal con todos los demorados sin despachar"
+          onClick={() => setRecordsModal("sinDespachar")}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") setRecordsModal("sinDespachar");
+          }}
+        >
           <table className="tableFixed">
             <colgroup>
               <col style={{ width: "92px" }} />
@@ -2629,6 +2665,9 @@ export default function DashboardClient() {
 
         <div className="sectionToolbar" style={{ marginTop: 10 }}>
           <div className="sectionActions">
+            <button type="button" className="recordsHint recordsHintInline" onClick={() => setRecordsModal("cerradosManual")}>
+              Presioná registros
+            </button>
             <div className="pager">
               <button
                 className="btn btnIcon"
@@ -2721,7 +2760,16 @@ export default function DashboardClient() {
           </div>
         </div>
 
-        <div className="tableScroll">
+        <div
+          className="tableScroll"
+          role="button"
+          tabIndex={0}
+          aria-label="Abrir modal con todos los cerrados manualmente"
+          onClick={() => setRecordsModal("cerradosManual")}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") setRecordsModal("cerradosManual");
+          }}
+        >
           <table className="tableFixed">
             <colgroup>
               <col style={{ width: "92px" }} />
@@ -2838,6 +2886,9 @@ export default function DashboardClient() {
 
         <div className="sectionToolbar" style={{ marginTop: 10 }}>
           <div className="sectionActions">
+            <button type="button" className="recordsHint recordsHintInline" onClick={() => setRecordsModal("cancelados")}>
+              Presioná registros
+            </button>
             <div className="pager">
               <button
                 className="btn btnIcon"
@@ -2930,7 +2981,16 @@ export default function DashboardClient() {
           </div>
         </div>
 
-        <div className="tableScroll">
+        <div
+          className="tableScroll"
+          role="button"
+          tabIndex={0}
+          aria-label="Abrir modal con todos los cancelados"
+          onClick={() => setRecordsModal("cancelados")}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") setRecordsModal("cancelados");
+          }}
+        >
           <table className="tableFixed">
             <colgroup>
               <col style={{ width: "92px" }} />
@@ -3398,6 +3458,212 @@ export default function DashboardClient() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        ) : null}
+
+        {recordsModal ? (
+          <div
+            className="qaModal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Registros"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setRecordsModal(null);
+            }}
+          >
+            <div className="qaModalPanel">
+              <div className="qaModalHeader">
+                <div className="qaModalTitle">
+                  {recordsModal === "reprogramar"
+                    ? "Pedidos a reprogramar · todos"
+                    : recordsModal === "sinDespachar"
+                      ? "Demorado sin despachar · todos"
+                      : recordsModal === "cerradosManual"
+                        ? "Cerrados manualmente · todos"
+                        : "Cancelados · todos"}
+                </div>
+                <button type="button" className="btn btnIcon" onClick={() => setRecordsModal(null)} aria-label="Cerrar">
+                  ✕
+                </button>
+              </div>
+
+              {recordsModal === "reprogramar" ? (
+                <div className="tableScroll">
+                  <table className="tableFixed">
+                    <colgroup>
+                      <col style={{ width: "92px" }} />
+                      <col style={{ width: "160px" }} />
+                      <col style={{ width: "64px" }} />
+                      <col style={{ width: "160px" }} />
+                      <col style={{ width: "260px" }} />
+                      <col style={{ width: "320px" }} />
+                      <col style={{ width: "160px" }} />
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th>#pedido</th>
+                        <th>Fecha y hora</th>
+                        <th>Franja</th>
+                        <th>Cliente</th>
+                        <th>Domicilio</th>
+                        <th>Producto</th>
+                        <th>Petshop</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reprogramarRowsSorted.map((r) => (
+                        <tr key={`${r.orderId}-${r.createdAt}`} data-ps={r.petshopId ?? ""}>
+                          <td className="mono">{r.orderId}</td>
+                          <td>{new Date(r.createdAt).toLocaleString("es-AR")}</td>
+                          <td className="franjaCell">
+                            <WindowPill win={r.deliveryWindow ?? null} />
+                          </td>
+                          <td className="truncate">{r.customer}</td>
+                          <td className="truncate">{r.address}</td>
+                          <td className="truncate">{r.product}</td>
+                          <td className="truncate">{r.petshopName ?? "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+
+              {recordsModal === "sinDespachar" ? (
+                <div className="tableScroll">
+                  <table className="tableFixed">
+                    <colgroup>
+                      <col style={{ width: "92px" }} />
+                      <col style={{ width: "160px" }} />
+                      <col style={{ width: "64px" }} />
+                      <col style={{ width: "160px" }} />
+                      <col style={{ width: "280px" }} />
+                      <col style={{ width: "340px" }} />
+                      <col style={{ width: "120px" }} />
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th>#pedido</th>
+                        <th>Etiqueta impresa</th>
+                        <th>Franja</th>
+                        <th>Cliente</th>
+                        <th>Domicilio</th>
+                        <th>Producto</th>
+                        <th>Horas de espera</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sinDespacharRowsSorted.map((r: SinDespacharRow) => {
+                        const color = r.waitHours > 28 ? "var(--bad)" : r.waitHours >= 24 ? "var(--warn)" : "var(--muted)";
+                        return (
+                          <tr key={`${r.orderId}-${r.labelPrintedAt}`}>
+                            <td className="mono">{r.orderId}</td>
+                            <td>{new Date(r.labelPrintedAt).toLocaleString("es-AR")}</td>
+                            <td className="franjaCell">
+                              <WindowPill win={r.deliveryWindow ?? null} />
+                            </td>
+                            <td className="truncate">{r.customer}</td>
+                            <td className="truncate">{r.address}</td>
+                            <td className="truncate">{r.product}</td>
+                            <td style={{ color, fontWeight: 500 }}>{round0(r.waitHours)}h</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+
+              {recordsModal === "cerradosManual" ? (
+                <div className="tableScroll">
+                  <table className="tableFixed">
+                    <colgroup>
+                      <col style={{ width: "92px" }} />
+                      <col style={{ width: "160px" }} />
+                      <col style={{ width: "64px" }} />
+                      <col style={{ width: "160px" }} />
+                      <col style={{ width: "280px" }} />
+                      <col style={{ width: "340px" }} />
+                      <col style={{ width: "160px" }} />
+                      <col style={{ width: "220px" }} />
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th>#pedido</th>
+                        <th>Cerrado</th>
+                        <th>Franja</th>
+                        <th>Cliente</th>
+                        <th>Domicilio</th>
+                        <th>Producto</th>
+                        <th>Petshop</th>
+                        <th>Nota</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cerradosManualmenteRowsSorted.map((r: CerradoManualRow) => (
+                        <tr key={`${r.orderId}-${r.closedAt}`}>
+                          <td className="mono">{r.orderId}</td>
+                          <td>{new Date(r.closedAt).toLocaleString("es-AR")}</td>
+                          <td className="franjaCell">
+                            <WindowPill win={r.deliveryWindow ?? null} />
+                          </td>
+                          <td className="truncate">{r.customer}</td>
+                          <td className="truncate">{r.address}</td>
+                          <td className="truncate">{r.product}</td>
+                          <td className="truncate">{r.petshopName ?? "—"}</td>
+                          <td className="truncate">{r.note}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+
+              {recordsModal === "cancelados" ? (
+                <div className="tableScroll">
+                  <table className="tableFixed">
+                    <colgroup>
+                      <col style={{ width: "92px" }} />
+                      <col style={{ width: "160px" }} />
+                      <col style={{ width: "64px" }} />
+                      <col style={{ width: "160px" }} />
+                      <col style={{ width: "280px" }} />
+                      <col style={{ width: "340px" }} />
+                      <col style={{ width: "160px" }} />
+                      <col style={{ width: "220px" }} />
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th>#pedido</th>
+                        <th>Cancelado</th>
+                        <th>Franja</th>
+                        <th>Cliente</th>
+                        <th>Domicilio</th>
+                        <th>Producto</th>
+                        <th>Petshop</th>
+                        <th>Motivo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {canceladosRowsSorted.map((r: CanceladoRow) => (
+                        <tr key={`${r.orderId}-${r.canceledAt}`}>
+                          <td className="mono">{r.orderId}</td>
+                          <td>{new Date(r.canceledAt).toLocaleString("es-AR")}</td>
+                          <td className="franjaCell">
+                            <WindowPill win={r.deliveryWindow ?? null} />
+                          </td>
+                          <td className="truncate">{r.customer}</td>
+                          <td className="truncate">{r.address}</td>
+                          <td className="truncate">{r.product}</td>
+                          <td className="truncate">{r.petshopName ?? "—"}</td>
+                          <td className="truncate">{r.reason}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}
