@@ -33,6 +33,12 @@ export type EstancadoRow = OpsRowBase & {
   waitHours: number;
 };
 
+export type VueltaRow = OpsRowBase & {
+  /** Timestamp del intento fallido */
+  attemptAt: string; // ISO
+  waitHours: number;
+};
+
 export type CerradoManualRow = OpsRowBase & {
   closedAt: string; // ISO
   /** Motivo/resumen del cierre manual */
@@ -167,6 +173,8 @@ export type OpsDashboardResponse = {
   estancadosRows: EstancadoRow[];
   cerradosManualmenteRows: CerradoManualRow[];
   canceladosRows: CanceladoRow[];
+  vuelta1Rows: VueltaRow[];
+  vuelta2Rows: VueltaRow[];
   top3Petshops: { petshopId: string; petshopName: string; pct: number; orders: number }[];
 };
 
@@ -396,6 +404,8 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
   const estancadosRows: EstancadoRow[] = [];
   const cerradosManualmenteRows: CerradoManualRow[] = [];
   const canceladosRows: CanceladoRow[] = [];
+  const vuelta1Rows: VueltaRow[] = [];
+  const vuelta2Rows: VueltaRow[] = [];
 
   // Build per-petshop metrics with plausible ranges
   for (const ps of petshops) {
@@ -723,6 +733,52 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
       });
     }
 
+    // 1ra vuelta: primer intento entre 24–48hs atrás
+    for (let i = 0; i < Math.min(14, vuelta1); i++) {
+      const win = pickDeliveryWindow(rnd);
+      const hoursAgo = 24 + rnd() * 23; // 24–47hs
+      const baseAttempt = new Date(now.getTime() - hoursAgo * 60 * 60 * 1000);
+      const attemptAt = dateWithWindow(baseAttempt, win, rnd);
+      const createdAt = dateWithWindow(new Date(attemptAt.getTime() - (12 + rnd() * 36) * 60 * 60 * 1000), win, rnd);
+      const waitHours = (now.getTime() - attemptAt.getTime()) / (1000 * 60 * 60);
+      const partido = pick(rnd, partidos);
+      vuelta1Rows.push({
+        orderId: orderIdNumeric(2000 + round0(rnd() * 8000)),
+        createdAt: createdAt.toISOString(),
+        customer: pick(rnd, customers),
+        address: `${pick(rnd, streets)} ${partido}`,
+        deliveryWindow: win,
+        product: `1 x ${ps.name} ${pick(rnd, products)}`,
+        petshopId: ps.id,
+        petshopName: ps.name,
+        attemptAt: attemptAt.toISOString(),
+        waitHours: round0(waitHours),
+      });
+    }
+
+    // 2da vuelta: segundo intento hace más de 48hs
+    for (let i = 0; i < Math.min(10, vuelta2); i++) {
+      const win = pickDeliveryWindow(rnd);
+      const hoursAgo = 48 + rnd() * 48; // 48–96hs
+      const baseAttempt = new Date(now.getTime() - hoursAgo * 60 * 60 * 1000);
+      const attemptAt = dateWithWindow(baseAttempt, win, rnd);
+      const createdAt = dateWithWindow(new Date(attemptAt.getTime() - (36 + rnd() * 48) * 60 * 60 * 1000), win, rnd);
+      const waitHours = (now.getTime() - attemptAt.getTime()) / (1000 * 60 * 60);
+      const partido = pick(rnd, partidos);
+      vuelta2Rows.push({
+        orderId: orderIdNumeric(3000 + round0(rnd() * 8000)),
+        createdAt: createdAt.toISOString(),
+        customer: pick(rnd, customers),
+        address: `${pick(rnd, streets)} ${partido}`,
+        deliveryWindow: win,
+        product: `1 x ${ps.name} ${pick(rnd, products)}`,
+        petshopId: ps.id,
+        petshopName: ps.name,
+        attemptAt: attemptAt.toISOString(),
+        waitHours: round0(waitHours),
+      });
+    }
+
   }
 
   // Un único caso estancado derivado a Mis Pichos (representativo).
@@ -750,6 +806,8 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
   estancadosRows.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   cerradosManualmenteRows.sort((a, b) => new Date(b.closedAt).getTime() - new Date(a.closedAt).getTime());
   canceladosRows.sort((a, b) => new Date(b.canceledAt).getTime() - new Date(a.canceledAt).getTime());
+  vuelta1Rows.sort((a, b) => new Date(a.attemptAt).getTime() - new Date(b.attemptAt).getTime());
+  vuelta2Rows.sort((a, b) => new Date(a.attemptAt).getTime() - new Date(b.attemptAt).getTime());
 
   // Daily timeline (global)
   const totalByPetshopToday = metricsByPetshop.map((m) => ({ id: m.petshopId, name: m.petshopName, total: m.total }));
@@ -784,6 +842,8 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
     estancadosRows,
     cerradosManualmenteRows,
     canceladosRows,
+    vuelta1Rows,
+    vuelta2Rows,
     top3Petshops,
   };
 }

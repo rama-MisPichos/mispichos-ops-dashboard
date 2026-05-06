@@ -19,6 +19,7 @@ import type {
   OpsDashboardResponse,
   PetshopMetrics,
   SinDespacharRow,
+  VueltaRow,
 } from "@/lib/data/mockOpsDashboard";
 import AiRecommendations from "./AiRecommendations";
 
@@ -993,11 +994,13 @@ export default function DashboardClient() {
   const [loading, setLoading] = useState(false);
 
   const PAGE_SIZE = 5;
-  const [incidenciasTab, setIncidenciasTab] = useState<"reprogramar" | "sinDespachar" | "cancelados" | "cerradosManual">("reprogramar");
+  const [incidenciasTab, setIncidenciasTab] = useState<"reprogramar" | "sinDespachar" | "cancelados" | "cerradosManual" | "vuelta1" | "vuelta2">("reprogramar");
   const [reprogramarPage, setReprogramarPage] = useState(0);
   const [sinDespacharPage, setSinDespacharPage] = useState(0);
   const [cerradosManualPage, setCerradosManualPage] = useState(0);
   const [canceladosPage, setCanceladosPage] = useState(0);
+  const [vuelta1Page, setVuelta1Page] = useState(0);
+  const [vuelta2Page, setVuelta2Page] = useState(0);
   const [capDayOffset, setCapDayOffset] = useState(0); // 0=hoy ... 6=+6 días
 
   useEffect(() => {
@@ -1191,11 +1194,50 @@ export default function DashboardClient() {
 
   const canceladosPages = useMemo(() => Math.max(1, Math.ceil(canceladosRowsSorted.length / PAGE_SIZE)), [canceladosRowsSorted.length]);
 
+  const vuelta1Rows = useMemo(() => {
+    if (!data) return [];
+    const rows = data.vuelta1Rows ?? [];
+    if (petshopId === "ALL") return rows;
+    return rows.filter((r) => r.petshopId === petshopId);
+  }, [data, petshopId]);
+
+  const vuelta2Rows = useMemo(() => {
+    if (!data) return [];
+    const rows = data.vuelta2Rows ?? [];
+    if (petshopId === "ALL") return rows;
+    return rows.filter((r) => r.petshopId === petshopId);
+  }, [data, petshopId]);
+
+  const vuelta1RowsSorted = useMemo(
+    () => vuelta1Rows.slice().sort((a, b) => new Date(a.attemptAt).getTime() - new Date(b.attemptAt).getTime()),
+    [vuelta1Rows],
+  );
+
+  const vuelta2RowsSorted = useMemo(
+    () => vuelta2Rows.slice().sort((a, b) => new Date(a.attemptAt).getTime() - new Date(b.attemptAt).getTime()),
+    [vuelta2Rows],
+  );
+
+  const vuelta1Pages = useMemo(() => Math.max(1, Math.ceil(vuelta1RowsSorted.length / PAGE_SIZE)), [vuelta1RowsSorted.length]);
+  const vuelta2Pages = useMemo(() => Math.max(1, Math.ceil(vuelta2RowsSorted.length / PAGE_SIZE)), [vuelta2RowsSorted.length]);
+
+  const vuelta1RowsView = useMemo(() => {
+    const start = vuelta1Page * PAGE_SIZE;
+    return vuelta1RowsSorted.slice(start, start + PAGE_SIZE);
+  }, [vuelta1Page, vuelta1RowsSorted]);
+
+  const vuelta2RowsView = useMemo(() => {
+    const start = vuelta2Page * PAGE_SIZE;
+    return vuelta2RowsSorted.slice(start, start + PAGE_SIZE);
+  }, [vuelta2Page, vuelta2RowsSorted]);
+
   useEffect(() => {
     setReprogramarPage(0);
     setSinDespacharPage(0);
     setCerradosManualPage(0);
     setCanceladosPage(0);
+    setVuelta1Page(0);
+    setVuelta2Page(0);
   }, [petshopId, from, to]);
 
   useEffect(() => {
@@ -1218,6 +1260,14 @@ export default function DashboardClient() {
   useEffect(() => {
     setCanceladosPage((p) => Math.min(p, canceladosPages - 1));
   }, [canceladosPages]);
+
+  useEffect(() => {
+    setVuelta1Page((p) => Math.min(p, vuelta1Pages - 1));
+  }, [vuelta1Pages]);
+
+  useEffect(() => {
+    setVuelta2Page((p) => Math.min(p, vuelta2Pages - 1));
+  }, [vuelta2Pages]);
 
   const reprogramarRowsView = useMemo(() => {
     const start = reprogramarPage * PAGE_SIZE;
@@ -1487,7 +1537,7 @@ export default function DashboardClient() {
   const qaTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [shortCapacityOpen, setShortCapacityOpen] = useState(false);
   const [flexCapacityOpen, setFlexCapacityOpen] = useState(false);
-  const [recordsModal, setRecordsModal] = useState<null | "reprogramar" | "sinDespachar" | "cerradosManual" | "cancelados">(null);
+  const [recordsModal, setRecordsModal] = useState<null | "reprogramar" | "sinDespachar" | "cerradosManual" | "cancelados" | "vuelta1" | "vuelta2">(null);
   const [topbarHidden, setTopbarHidden] = useState(false);
   const lastScrollYRef = useRef(0);
   const rafRef = useRef<number | null>(null);
@@ -3009,13 +3059,15 @@ export default function DashboardClient() {
             <select
               className="selectInput"
               value={incidenciasTab}
-              onChange={(e) => setIncidenciasTab(e.target.value as "reprogramar" | "sinDespachar" | "cancelados" | "cerradosManual")}
+              onChange={(e) => setIncidenciasTab(e.target.value as "reprogramar" | "sinDespachar" | "cancelados" | "cerradosManual" | "vuelta1" | "vuelta2")}
               style={{ fontWeight: 500 }}
             >
               <option value="reprogramar">Pedidos a reprogramar</option>
               <option value="sinDespachar">Demorado sin despachar</option>
               <option value="cancelados">Cancelados</option>
               <option value="cerradosManual">Cerrados manualmente</option>
+              <option value="vuelta1">1ra vuelta (&gt;24hs)</option>
+              <option value="vuelta2">2da vuelta (&gt;48hs)</option>
             </select>
             <p>
               {incidenciasTab === "reprogramar"
@@ -3024,6 +3076,10 @@ export default function DashboardClient() {
                 ? "Etiqueta impresa >24hs sin driver"
                 : incidenciasTab === "cancelados"
                 ? "Estado operativo"
+                : incidenciasTab === "vuelta1"
+                ? "Primer intento hace más de 24hs sin resolución"
+                : incidenciasTab === "vuelta2"
+                ? "Segundo intento hace más de 48hs sin resolución"
                 : "Casos aislados + cierres manuales"}
             </p>
           </div>
@@ -3302,6 +3358,90 @@ export default function DashboardClient() {
                   Descargar Excel
                 </button>
               </>
+            ) : incidenciasTab === "vuelta1" ? (
+              <>
+                <button type="button" className="recordsHint recordsHintInline" onClick={() => setRecordsModal("vuelta1")}>
+                  Presioná registros (más info)
+                </button>
+                <div className="pager">
+                  <button className="btn btnIcon" type="button" onClick={() => setVuelta1Page((p) => Math.max(0, p - 1))} disabled={vuelta1Page <= 0} aria-label="Página anterior" title="Anterior">←</button>
+                  <span className="sub mono">{vuelta1RowsSorted.length} · {vuelta1Page + 1}/{vuelta1Pages}</span>
+                  <button className="btn btnIcon" type="button" onClick={() => setVuelta1Page((p) => Math.min(vuelta1Pages - 1, p + 1))} disabled={vuelta1Page >= vuelta1Pages - 1} aria-label="Página siguiente" title="Siguiente">→</button>
+                </div>
+                <CopyActionButton
+                  label="Wpp"
+                  className="btnPanelAction"
+                  onCopy={async () => {
+                    const headers = ["#pedido", "intento", "franja"];
+                    const rows = vuelta1RowsSorted.map((r) => [r.orderId, new Date(r.attemptAt).toLocaleDateString("es-AR"), r.deliveryWindow ?? ""]);
+                    await navigator.clipboard.writeText(toFixedWidthTable(headers, rows, { maxColWidths: [9, 10, 7], wrapInCodeBlock: false }));
+                  }}
+                />
+                <CopyActionButton
+                  label="Mail"
+                  className="btnPanelAction"
+                  onCopy={async () => {
+                    const headers = ["#pedido", "1er intento", "franja", "cliente", "domicilio", "producto", "petshop", "horas"];
+                    const rows = vuelta1RowsSorted.map((r) => [r.orderId, new Date(r.attemptAt).toLocaleString("es-AR"), r.deliveryWindow ?? "", r.customer, r.address, r.product, r.petshopName ?? "", `${round0(r.waitHours)}h`]);
+                    const text = toFixedWidthTable(headers, rows, { maxColWidths: [9, 19, 7, 18, 22, 26, 16, 8], wrapInCodeBlock: true });
+                    const html = toHtmlTable(headers, rows);
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const ClipboardItemCtor: any = (window as any).ClipboardItem;
+                    if (ClipboardItemCtor && navigator.clipboard?.write) {
+                      await navigator.clipboard.write([new ClipboardItemCtor({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]);
+                    } else {
+                      await navigator.clipboard.writeText(text);
+                    }
+                  }}
+                />
+                <button className="btn btnPanelAction" type="button" onClick={() => {
+                  const headers = ["pedido", "1er_intento", "franja", "cliente", "domicilio", "producto", "petshop", "horas"];
+                  const rows = vuelta1RowsSorted.map((r) => [r.orderId, new Date(r.attemptAt).toLocaleString("es-AR"), r.deliveryWindow ?? "", r.customer, r.address, r.product, r.petshopName ?? "", String(round0(r.waitHours))]);
+                  downloadTextFile(`1ra_vuelta_${from}_${to}.csv`, toCsv(headers, rows, ";"), "text/csv;charset=utf-8");
+                }}>Descargar Excel</button>
+              </>
+            ) : incidenciasTab === "vuelta2" ? (
+              <>
+                <button type="button" className="recordsHint recordsHintInline" onClick={() => setRecordsModal("vuelta2")}>
+                  Presioná registros (más info)
+                </button>
+                <div className="pager">
+                  <button className="btn btnIcon" type="button" onClick={() => setVuelta2Page((p) => Math.max(0, p - 1))} disabled={vuelta2Page <= 0} aria-label="Página anterior" title="Anterior">←</button>
+                  <span className="sub mono">{vuelta2RowsSorted.length} · {vuelta2Page + 1}/{vuelta2Pages}</span>
+                  <button className="btn btnIcon" type="button" onClick={() => setVuelta2Page((p) => Math.min(vuelta2Pages - 1, p + 1))} disabled={vuelta2Page >= vuelta2Pages - 1} aria-label="Página siguiente" title="Siguiente">→</button>
+                </div>
+                <CopyActionButton
+                  label="Wpp"
+                  className="btnPanelAction"
+                  onCopy={async () => {
+                    const headers = ["#pedido", "intento", "franja"];
+                    const rows = vuelta2RowsSorted.map((r) => [r.orderId, new Date(r.attemptAt).toLocaleDateString("es-AR"), r.deliveryWindow ?? ""]);
+                    await navigator.clipboard.writeText(toFixedWidthTable(headers, rows, { maxColWidths: [9, 10, 7], wrapInCodeBlock: false }));
+                  }}
+                />
+                <CopyActionButton
+                  label="Mail"
+                  className="btnPanelAction"
+                  onCopy={async () => {
+                    const headers = ["#pedido", "2do intento", "franja", "cliente", "domicilio", "producto", "petshop", "horas"];
+                    const rows = vuelta2RowsSorted.map((r) => [r.orderId, new Date(r.attemptAt).toLocaleString("es-AR"), r.deliveryWindow ?? "", r.customer, r.address, r.product, r.petshopName ?? "", `${round0(r.waitHours)}h`]);
+                    const text = toFixedWidthTable(headers, rows, { maxColWidths: [9, 19, 7, 18, 22, 26, 16, 8], wrapInCodeBlock: true });
+                    const html = toHtmlTable(headers, rows);
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const ClipboardItemCtor: any = (window as any).ClipboardItem;
+                    if (ClipboardItemCtor && navigator.clipboard?.write) {
+                      await navigator.clipboard.write([new ClipboardItemCtor({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]);
+                    } else {
+                      await navigator.clipboard.writeText(text);
+                    }
+                  }}
+                />
+                <button className="btn btnPanelAction" type="button" onClick={() => {
+                  const headers = ["pedido", "2do_intento", "franja", "cliente", "domicilio", "producto", "petshop", "horas"];
+                  const rows = vuelta2RowsSorted.map((r) => [r.orderId, new Date(r.attemptAt).toLocaleString("es-AR"), r.deliveryWindow ?? "", r.customer, r.address, r.product, r.petshopName ?? "", String(round0(r.waitHours))]);
+                  downloadTextFile(`2da_vuelta_${from}_${to}.csv`, toCsv(headers, rows, ";"), "text/csv;charset=utf-8");
+                }}>Descargar Excel</button>
+              </>
             ) : (
               <>
                 <button type="button" className="recordsHint recordsHintInline" onClick={() => setRecordsModal("cerradosManual")}>
@@ -3512,6 +3652,7 @@ export default function DashboardClient() {
               if (e.key === "Enter" || e.key === " ") setRecordsModal("cancelados");
             }}
           >
+
             <table className="tableFixed">
               <colgroup>
                 <col style={{ width: "92px" }} />
@@ -3550,6 +3691,94 @@ export default function DashboardClient() {
                     <td className="truncate">{r.reason}</td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        ) : incidenciasTab === "vuelta1" ? (
+          <div className="tableScroll" role="button" tabIndex={0} aria-label="Abrir modal con todos los de 1ra vuelta" onClick={() => setRecordsModal("vuelta1")} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setRecordsModal("vuelta1"); }}>
+            <table className="tableFixed">
+              <colgroup>
+                <col style={{ width: "92px" }} />
+                <col style={{ width: "160px" }} />
+                <col style={{ width: "64px" }} />
+                <col style={{ width: "160px" }} />
+                <col style={{ width: "280px" }} />
+                <col style={{ width: "320px" }} />
+                <col style={{ width: "140px" }} />
+                <col style={{ width: "90px" }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>#pedido</th>
+                  <th>1er intento</th>
+                  <th>Franja</th>
+                  <th>Cliente</th>
+                  <th>Domicilio</th>
+                  <th>Producto</th>
+                  <th>Petshop</th>
+                  <th>Horas</th>
+                </tr>
+              </thead>
+              <tbody>
+                {vuelta1RowsView.map((r: VueltaRow) => {
+                  const color = r.waitHours > 36 ? "var(--bad)" : r.waitHours >= 24 ? "var(--warn)" : "var(--muted)";
+                  return (
+                    <tr key={`${r.orderId}-${r.attemptAt}`}>
+                      <td className="mono">{r.orderId}</td>
+                      <td>{new Date(r.attemptAt).toLocaleString("es-AR")}</td>
+                      <td className="franjaCell"><WindowPill win={r.deliveryWindow ?? null} /></td>
+                      <td className="truncate">{r.customer}</td>
+                      <td className="truncate">{r.address}</td>
+                      <td className="truncate">{r.product}</td>
+                      <td className="truncate">{r.petshopName ?? "—"}</td>
+                      <td style={{ color, fontWeight: 500 }}>{round0(r.waitHours)}h</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : incidenciasTab === "vuelta2" ? (
+          <div className="tableScroll" role="button" tabIndex={0} aria-label="Abrir modal con todos los de 2da vuelta" onClick={() => setRecordsModal("vuelta2")} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setRecordsModal("vuelta2"); }}>
+            <table className="tableFixed">
+              <colgroup>
+                <col style={{ width: "92px" }} />
+                <col style={{ width: "160px" }} />
+                <col style={{ width: "64px" }} />
+                <col style={{ width: "160px" }} />
+                <col style={{ width: "280px" }} />
+                <col style={{ width: "320px" }} />
+                <col style={{ width: "140px" }} />
+                <col style={{ width: "90px" }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>#pedido</th>
+                  <th>2do intento</th>
+                  <th>Franja</th>
+                  <th>Cliente</th>
+                  <th>Domicilio</th>
+                  <th>Producto</th>
+                  <th>Petshop</th>
+                  <th>Horas</th>
+                </tr>
+              </thead>
+              <tbody>
+                {vuelta2RowsView.map((r: VueltaRow) => {
+                  const color = r.waitHours > 72 ? "var(--bad)" : r.waitHours >= 48 ? "var(--warn)" : "var(--muted)";
+                  return (
+                    <tr key={`${r.orderId}-${r.attemptAt}`}>
+                      <td className="mono">{r.orderId}</td>
+                      <td>{new Date(r.attemptAt).toLocaleString("es-AR")}</td>
+                      <td className="franjaCell"><WindowPill win={r.deliveryWindow ?? null} /></td>
+                      <td className="truncate">{r.customer}</td>
+                      <td className="truncate">{r.address}</td>
+                      <td className="truncate">{r.product}</td>
+                      <td className="truncate">{r.petshopName ?? "—"}</td>
+                      <td style={{ color, fontWeight: 500 }}>{round0(r.waitHours)}h</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -3699,7 +3928,11 @@ export default function DashboardClient() {
                     ? "Demorado sin despachar · todos"
                     : recordsModal === "cerradosManual"
                       ? "Cerrados manualmente · todos"
-                      : "Cancelados · todos"}
+                      : recordsModal === "vuelta1"
+                        ? "1ra vuelta · todos"
+                        : recordsModal === "vuelta2"
+                          ? "2da vuelta · todos"
+                          : "Cancelados · todos"}
               </div>
               <button type="button" className="btn btnIcon" onClick={() => setRecordsModal(null)} aria-label="Cerrar">
                 ✕
@@ -3833,6 +4066,98 @@ export default function DashboardClient() {
                         <td className="truncate">{r.note}</td>
                       </tr>
                     ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+
+            {recordsModal === "vuelta1" ? (
+              <div className="tableScroll">
+                <table className="tableFixed">
+                  <colgroup>
+                    <col style={{ width: "92px" }} />
+                    <col style={{ width: "160px" }} />
+                    <col style={{ width: "64px" }} />
+                    <col style={{ width: "160px" }} />
+                    <col style={{ width: "280px" }} />
+                    <col style={{ width: "320px" }} />
+                    <col style={{ width: "140px" }} />
+                    <col style={{ width: "90px" }} />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th>#pedido</th>
+                      <th>1er intento</th>
+                      <th>Franja</th>
+                      <th>Cliente</th>
+                      <th>Domicilio</th>
+                      <th>Producto</th>
+                      <th>Petshop</th>
+                      <th>Horas</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {vuelta1RowsSorted.map((r: VueltaRow) => {
+                      const color = r.waitHours > 36 ? "var(--bad)" : r.waitHours >= 24 ? "var(--warn)" : "var(--muted)";
+                      return (
+                        <tr key={`${r.orderId}-${r.attemptAt}`}>
+                          <td className="mono">{r.orderId}</td>
+                          <td>{new Date(r.attemptAt).toLocaleString("es-AR")}</td>
+                          <td className="franjaCell"><WindowPill win={r.deliveryWindow ?? null} /></td>
+                          <td className="truncate">{r.customer}</td>
+                          <td className="truncate">{r.address}</td>
+                          <td className="truncate">{r.product}</td>
+                          <td className="truncate">{r.petshopName ?? "—"}</td>
+                          <td style={{ color, fontWeight: 500 }}>{round0(r.waitHours)}h</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+
+            {recordsModal === "vuelta2" ? (
+              <div className="tableScroll">
+                <table className="tableFixed">
+                  <colgroup>
+                    <col style={{ width: "92px" }} />
+                    <col style={{ width: "160px" }} />
+                    <col style={{ width: "64px" }} />
+                    <col style={{ width: "160px" }} />
+                    <col style={{ width: "280px" }} />
+                    <col style={{ width: "320px" }} />
+                    <col style={{ width: "140px" }} />
+                    <col style={{ width: "90px" }} />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th>#pedido</th>
+                      <th>2do intento</th>
+                      <th>Franja</th>
+                      <th>Cliente</th>
+                      <th>Domicilio</th>
+                      <th>Producto</th>
+                      <th>Petshop</th>
+                      <th>Horas</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {vuelta2RowsSorted.map((r: VueltaRow) => {
+                      const color = r.waitHours > 72 ? "var(--bad)" : r.waitHours >= 48 ? "var(--warn)" : "var(--muted)";
+                      return (
+                        <tr key={`${r.orderId}-${r.attemptAt}`}>
+                          <td className="mono">{r.orderId}</td>
+                          <td>{new Date(r.attemptAt).toLocaleString("es-AR")}</td>
+                          <td className="franjaCell"><WindowPill win={r.deliveryWindow ?? null} /></td>
+                          <td className="truncate">{r.customer}</td>
+                          <td className="truncate">{r.address}</td>
+                          <td className="truncate">{r.product}</td>
+                          <td className="truncate">{r.petshopName ?? "—"}</td>
+                          <td style={{ color, fontWeight: 500 }}>{round0(r.waitHours)}h</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
