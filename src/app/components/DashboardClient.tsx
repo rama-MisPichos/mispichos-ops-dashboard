@@ -87,6 +87,55 @@ function startOfMonth(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
 }
 
+function startOfWeekLocal(d: Date) {
+  // Semana lunes-domingo
+  const dow = d.getDay(); // 0=Dom, 1=Lun..6=Sáb
+  const daysFromMon = (dow + 6) % 7;
+  return addDaysLocal(d, -daysFromMon);
+}
+
+type CompareMode = "daily" | "weekly" | "biweekly" | "monthly";
+
+function getPresetPeriod(mode: CompareMode, today: Date): {
+  from: string; to: string;
+  prevFrom: string; prevTo: string;
+  vsLabel: string;
+} | null {
+  if (mode === "daily") return null;
+  const tomorrow = addDaysLocal(today, 1);
+  const mon = startOfWeekLocal(today);
+
+  if (mode === "weekly") {
+    return {
+      from: ymd(mon),
+      to: ymd(tomorrow),
+      prevFrom: ymd(addDaysLocal(mon, -7)),
+      prevTo: ymd(mon),
+      vsLabel: "sem. ant.",
+    };
+  }
+  if (mode === "biweekly") {
+    const mon2 = addDaysLocal(mon, -7);
+    return {
+      from: ymd(mon2),
+      to: ymd(tomorrow),
+      prevFrom: ymd(addDaysLocal(mon2, -14)),
+      prevTo: ymd(mon2),
+      vsLabel: "quincena ant.",
+    };
+  }
+  // monthly
+  const firstThisMonth = startOfMonth(today);
+  const firstLastMonth = startOfMonth(addDaysLocal(firstThisMonth, -1));
+  return {
+    from: ymd(firstThisMonth),
+    to: ymd(tomorrow),
+    prevFrom: ymd(firstLastMonth),
+    prevTo: ymd(firstThisMonth),
+    vsLabel: "mes ant.",
+  };
+}
+
 function sameYmd(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
@@ -813,9 +862,9 @@ function downloadTextFile(filename: string, content: string, mime: string) {
  * El dashboard usa “vs ayer” en varios lugares.
  * Mostramos el % redondeado y mantenemos los colores consistentes con ese redondeo.
  */
-function kpiDeltaText(deltaPct: number) {
+function kpiDeltaText(deltaPct: number, vsLabel = "ayer") {
   const sign = deltaPct >= 0 ? "+" : "";
-  return `${sign}${round0(deltaPct)}% vs ayer`;
+  return `${sign}${round0(deltaPct)}% vs ${vsLabel}`;
 }
 
 function deltaColor(deltaPct: number) {
@@ -837,7 +886,7 @@ function deltaColorForMetric(deltaPct: number, mode: "higher_better" | "lower_be
  * Primitiva de UI para “vs ayer”: solo texto + flecha (sin “globito”),
  * porque la señal principal la da el color de fondo de la tarjeta completa.
  */
-function DeltaPill({ deltaPct, mode = "higher_better" }: { deltaPct: number; mode?: "higher_better" | "lower_better" }) {
+function DeltaPill({ deltaPct, mode = "higher_better", vsLabel = "ayer" }: { deltaPct: number; mode?: "higher_better" | "lower_better"; vsLabel?: string }) {
   const r = round0(deltaPct);
   const dir = r > 0 ? "up" : r < 0 ? "down" : "flat";
   const arrow = r > 0 ? "↗" : r < 0 ? "↘" : "→";
@@ -846,7 +895,7 @@ function DeltaPill({ deltaPct, mode = "higher_better" }: { deltaPct: number; mod
       <span className="deltaArrow" aria-hidden="true">
         {arrow}
       </span>
-      <span>{kpiDeltaText(deltaPct)}</span>
+      <span>{kpiDeltaText(deltaPct, vsLabel)}</span>
     </span>
   );
 }
@@ -982,8 +1031,8 @@ function nearCapacityPctClass(pct0: number) {
 
 export default function DashboardClient() {
   const today = useMemo(() => new Date(), []);
-  const [from, setFrom] = useState(() => ymd(new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000)));
-  const [to, setTo] = useState(() => ymd(new Date(today.getTime() + 1 * 24 * 60 * 60 * 1000)));
+  const [from, setFrom] = useState(() => ymd(today));
+  const [to, setTo] = useState(() => ymd(today));
   const [petshopId, setPetshopId] = useState<string>("ALL");
   const [dateRangeOpen, setDateRangeOpen] = useState(false);
   const [calMonth, setCalMonth] = useState(() => startOfMonth(ymdToDateLocal(from)));
@@ -992,6 +1041,9 @@ export default function DashboardClient() {
 
   const [data, setData] = useState<OpsDashboardResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [compareMode, setCompareMode] = useState<CompareMode>("daily");
+  const [prevData, setPrevData] = useState<OpsDashboardResponse | null>(null);
+  const [prevLoading, setPrevLoading] = useState(false);
 
   const PAGE_SIZE = 5;
   const [incidenciasTab, setIncidenciasTab] = useState<"reprogramar" | "sinDespachar" | "cancelados" | "cerradosManual" | "vuelta1" | "vuelta2">("reprogramar");
@@ -1026,6 +1078,43 @@ export default function DashboardClient() {
   }, [from, to]);
 
   const now = data?.now ? new Date(data.now) : null;
+
+  const presetPeriod = useMemo(() => getPresetPeriod(compareMode, today), [compareMode, today]);
+
+  // Para modo diario: el período previo es la misma ventana desplazada hacia atrás.
+  const activePrevPeriod = useMemo(() => {
+    if (presetPeriod) return presetPeriod; // weekly/biweekly/monthly ya lo calcula
+    const fromDate = ymdToDateLocal(from);
+    const toDate = ymdToDateLocal(to);
+    const daysDiff = Math.round((toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24));
+    if (daysDiff <= 0) return null;
+    const prevFrom = ymd(addDaysLocal(fromDate, -daysDiff));
+    const prevTo = from; // exclusivo
+    const vsLabel = daysDiff === 1 ? "día ant." : "período ant.";
+    return { prevFrom, prevTo, vsLabel };
+  }, [presetPeriod, from, to]);
+
+  useEffect(() => {
+    if (!activePrevPeriod) { setPrevData(null); return; }
+    const { prevFrom, prevTo } = activePrevPeriod;
+    let cancelled = false;
+    async function loadPrev() {
+      setPrevLoading(true);
+      try {
+        const fromIso = new Date(`${prevFrom}T00:00:00`).toISOString();
+        const toIso = new Date(`${prevTo}T00:00:00`).toISOString();
+        const d: OpsDashboardResponse = await fetch(
+          `/api/ops/dashboard?from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}`,
+        ).then((r) => r.json());
+        if (cancelled) return;
+        setPrevData(d);
+      } finally {
+        if (!cancelled) setPrevLoading(false);
+      }
+    }
+    void loadPrev();
+    return () => { cancelled = true; };
+  }, [activePrevPeriod?.prevFrom, activePrevPeriod?.prevTo]);
 
   const petshops = data?.petshops?.filter((p0) => p0.active) ?? [];
   const activePetshop = petshopId === "ALL" ? null : petshops.find((p0) => p0.id === petshopId) ?? null;
@@ -1096,6 +1185,35 @@ export default function DashboardClient() {
     const m = data.metricsByPetshop.find((x) => x.petshopId === petshopId);
     return m ?? null;
   }, [data, metricsAll, petshopId]);
+
+  const prevMetricsAll = useMemo(() => {
+    const list = prevData?.metricsByPetshop ?? [];
+    if (!list.length) return null;
+    const sum = (f: (m: PetshopMetrics) => number) => list.reduce((acc, m) => acc + (f(m) ?? 0), 0);
+    const total = sum((m) => m.total);
+    const delivered = sum((m) => m.delivered);
+    const transacciones = sum((m) => m.transacciones);
+    const gmv = sum((m) => m.gmv);
+    const demSinDespachar = sum((m) => m.demSinDespachar);
+    const vuelta1 = sum((m) => m.vuelta1);
+    const vuelta2 = sum((m) => m.vuelta2);
+    const reprog = sum((m) => m.reprog);
+    const cancel = sum((m) => m.cancel);
+    const split = sum((m) => m.split);
+    const onTimeN = sum((m) => m.onTimeN);
+    const outTimeN = sum((m) => m.outTimeN);
+    const eligible = Math.max(0, total - cancel);
+    return { total, delivered, transacciones, gmv, demSinDespachar, vuelta1, vuelta2, reprog, cancel, split, onTimeN, outTimeN, onTimePct: pct(onTimeN, eligible) };
+  }, [prevData?.metricsByPetshop]);
+
+  const prevMetricsSelected = useMemo(() => {
+    if (!prevData) return null;
+    if (petshopId === "ALL") return prevMetricsAll;
+    const m = prevData.metricsByPetshop.find((x) => x.petshopId === petshopId);
+    if (!m) return null;
+    const eligible = Math.max(0, m.total - m.cancel);
+    return { ...m, onTimePct: pct(m.onTimeN, eligible) };
+  }, [prevData, prevMetricsAll, petshopId]);
 
   /**
    * SL (prom.) en la tarjeta superior:
@@ -1524,6 +1642,16 @@ export default function DashboardClient() {
     return { split: metricsSelected.split ?? 0, pct0: round0(metricsSelected.splitPct ?? 0), total: metricsSelected.transacciones ?? 0 };
   }, [globalSplitBadge.pct, globalSplitBadge.split, metricsAll?.transacciones, metricsSelected, petshopId]);
 
+  const vsLabel = activePrevPeriod?.vsLabel ?? "ayer";
+
+  function deltaFor(current: number, prevVal: number | null | undefined, fallbackKey: string): number {
+    if (prevVal != null && Number.isFinite(prevVal)) {
+      if (prevVal === 0) return 0;
+      return ((current - prevVal) / Math.abs(prevVal)) * 100;
+    }
+    return stableDeltaPctFor(fallbackKey);
+  }
+
   const viewPillText = petshopId === "ALL" ? "Vista global" : activePetshop?.name ?? "Petshop";
 
   const [totalDeltaPct, setTotalDeltaPct] = useState<number | null>(null);
@@ -1594,19 +1722,19 @@ export default function DashboardClient() {
   }, [favoriteIds]);
 
   useEffect(() => {
-    // Stable mock delta: changes only when context changes, not on re-renders (e.g. theme toggle)
-    if (!metricsSelected) {
-      setTotalDeltaPct(null);
+    if (!metricsSelected) { setTotalDeltaPct(null); return; }
+    if (prevMetricsSelected != null) {
+      const prev = prevMetricsSelected.total;
+      setTotalDeltaPct(prev === 0 ? 0 : ((metricsSelected.total - prev) / Math.abs(prev)) * 100);
       return;
     }
-    // Keep it deterministic-ish and stable for a given context
+    // Fallback: stable mock delta
     const key = `${petshopId}|${from}|${to}`;
     let hash = 0;
     for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) | 0;
-    const r01 = (Math.abs(hash) % 1000) / 1000; // 0..0.999
-    const delta = (r01 - 0.4) * 20;
-    setTotalDeltaPct(delta);
-  }, [metricsSelected, petshopId, from, to]);
+    const r01 = (Math.abs(hash) % 1000) / 1000;
+    setTotalDeltaPct((r01 - 0.4) * 20);
+  }, [metricsSelected, prevMetricsSelected, petshopId, from, to]);
 
   useEffect(() => {
     setCapDayOffset(0);
@@ -1784,7 +1912,7 @@ export default function DashboardClient() {
                   }}
                 />
               </div>
-              <LineMini points={(capacity.flex.daily?.length ? capacity.flex.daily : []).map((x, i) => ({ x: i, y: x.used }))} limit={round0(capacity.flex.limit)} color="var(--capFlex)" />
+              <LineHourly hourly={fillHours24(capacity.flex.hourly ?? [])} limit={round0(capacity.flex.limit)} color="var(--capFlex)" nowHour={now ? now.getHours() : undefined} />
               <div className="utilMeta">
                 <span className="utilChip utilChipLimit">
                   <span className="utilChipSwatch utilChipSwatchLimit" aria-hidden="true" />
@@ -1832,7 +1960,7 @@ export default function DashboardClient() {
                   }}
                 />
               </div>
-              <LineMini points={(capacity.franja.daily?.length ? capacity.franja.daily : []).map((x, i) => ({ x: i, y: x.used }))} limit={round0(capacity.franja.limit)} color="var(--cap1418)" />
+              <LineHourly hourly={fillHours24(capacity.franja.hourly ?? [])} limit={round0(capacity.franja.limit)} color="var(--cap1418)" nowHour={now ? now.getHours() : undefined} />
               <div className="utilMeta">
                 <span className="utilChip utilChipLimit">
                   <span className="utilChipSwatch utilChipSwatchLimit" aria-hidden="true" />
@@ -2072,6 +2200,7 @@ export default function DashboardClient() {
                 const toExclusive = ymd(addDaysLocal(ymdToDateLocal(toInc), 1));
                 setFrom(fromY);
                 setTo(toExclusive);
+                setCompareMode("daily"); // rango manual → volver a comparación diaria
                 setDraftFromYmd(null);
                 setDraftToYmdInclusive(null);
                 setDateRangeOpen(false);
@@ -2187,6 +2316,26 @@ export default function DashboardClient() {
                   {p0.name}
                 </option>
               ))}
+            </select>
+          </label>
+          <label className="chip">
+            <span>Comparar</span>
+            <select
+              className="selectInput"
+              value={compareMode}
+              onChange={(e) => {
+                const mode = e.target.value as CompareMode;
+                setCompareMode(mode);
+                if (mode !== "daily") {
+                  const preset = getPresetPeriod(mode, today);
+                  if (preset) { setFrom(preset.from); setTo(preset.to); }
+                }
+              }}
+            >
+              <option value="daily">Diario</option>
+              <option value="weekly">Semanal</option>
+              <option value="biweekly">Quincenal</option>
+              <option value="monthly">Mensual</option>
             </select>
           </label>
           <button
@@ -2357,7 +2506,7 @@ export default function DashboardClient() {
               <div className="kpiValueRow">
                 <div className="kpiValue">{metricsSelected ? metricsSelected.total.toLocaleString("es-AR") : "—"}</div>
                 <div className="kpiDeltaRight">
-                  {metricsSelected && totalDeltaPct != null ? <DeltaPill deltaPct={totalDeltaPct} mode="higher_better" /> : <span className="sub">—</span>}
+                  {metricsSelected && totalDeltaPct != null ? <DeltaPill deltaPct={totalDeltaPct} mode="higher_better" vsLabel={vsLabel} /> : <span className="sub">—</span>}
                 </div>
               </div>
               <div className="kpiSub">
@@ -2388,9 +2537,7 @@ export default function DashboardClient() {
               // Mismo % que el doughnut "Entregas a tiempo": A tiempo / (A tiempo + Fuera de tiempo)
               const onTimePct =
                 metricsSelected != null ? pct(metricsSelected.onTimeN ?? 0, (metricsSelected.onTimeN ?? 0) + (metricsSelected.outTimeN ?? 0)) : null;
-              const dOnTime = stableDeltaPctFor(`${petshopId}|${from}|${to}|onTimePct`);
-              const slPct = petshopId === "ALL" ? slPctAvgAll : metricsSelected?.slPct ?? null;
-              const dSl = stableDeltaPctFor(`${petshopId}|${from}|${to}|${petshopId === "ALL" ? "slPctAvg" : "slPct"}`);
+              const dOnTime = deltaFor(onTimePct ?? 0, prevMetricsSelected?.onTimePct, `${petshopId}|${from}|${to}|onTimePct`);
 
               return (
                 <div className="kpiMiniGrid kpiMiniBelow" aria-label="On-time" style={{ gridTemplateColumns: "1fr" }}>
@@ -2399,7 +2546,7 @@ export default function DashboardClient() {
                     <div className="kpiMiniRow">
                       <div className="kpiMiniValue mono">{onTimePct != null ? formatPct0(onTimePct) : "—"}</div>
                       <div className="kpiMiniDelta">
-                        {onTimePct != null ? <DeltaPill deltaPct={dOnTime} mode="higher_better" /> : <span className="sub">—</span>}
+                        {onTimePct != null ? <DeltaPill deltaPct={dOnTime} mode="higher_better" vsLabel={vsLabel} /> : <span className="sub">—</span>}
                       </div>
                     </div>
                   </div>
@@ -2409,206 +2556,37 @@ export default function DashboardClient() {
           </div>
 
           <div className="kpiSmallGrid">
-            <div
-              className={`kpiSmall ${
-                metricsSelected
-                  ? deltaBgClass(
-                      deltaBgTone(
-                        stableDeltaPctFor(`${petshopId}|${from}|${to}|demSinDespachar`),
-                        KPI_DELTA_BG.demSinDespachar.mode,
-                        KPI_DELTA_BG.demSinDespachar.neutralAbsPct
-                      )
-                    )
-                  : "kpiBgNeutral"
-              }`}
-            >
-              <div className="kpiLabel">Demorado sin despachar</div>
-              {metricsSelected ? (
-                (() => {
-                  const d = stableDeltaPctFor(`${petshopId}|${from}|${to}|demSinDespachar`);
-                  const prev = previousFromDelta(metricsSelected.demSinDespachar ?? 0, d);
-                  return (
+            {(
+              [
+                { key: "demSinDespachar", label: "Demorado sin despachar", cls: "kpiSmall", cfg: KPI_DELTA_BG.demSinDespachar, cur: metricsSelected?.demSinDespachar, prv: prevMetricsSelected?.demSinDespachar },
+                { key: "vuelta1",         label: "1ra vuelta",             cls: "kpiSmall", cfg: KPI_DELTA_BG.vuelta1,         cur: metricsSelected?.vuelta1,         prv: prevMetricsSelected?.vuelta1 },
+                { key: "vuelta2",         label: "2da vuelta",             cls: "kpiSmall", cfg: KPI_DELTA_BG.vuelta2,         cur: metricsSelected?.vuelta2,         prv: prevMetricsSelected?.vuelta2 },
+                { key: "cancel",          label: "Cancelados",             cls: "kpiSmall kpiSmallWide", cfg: KPI_DELTA_BG.cancel,         cur: metricsSelected?.cancel,          prv: prevMetricsSelected?.cancel },
+                { key: "reprog",          label: "Reprogramar",            cls: "kpiSmall kpiSmallWide", cfg: KPI_DELTA_BG.reprog,          cur: metricsSelected?.reprog,          prv: prevMetricsSelected?.reprog },
+              ] as Array<{ key: string; label: string; cls: string; cfg: { mode: "higher_better" | "lower_better"; neutralAbsPct: number }; cur: number | undefined; prv: number | undefined }>
+            ).map(({ key, label, cls, cfg, cur, prv }) => {
+              const d = deltaFor(cur ?? 0, prv, `${petshopId}|${from}|${to}|${key}`);
+              const prevVal = prv != null ? prv : previousFromDelta(cur ?? 0, d);
+              return (
+                <div key={key} className={`${cls} ${metricsSelected ? deltaBgClass(deltaBgTone(d, cfg.mode, cfg.neutralAbsPct)) : "kpiBgNeutral"}`}>
+                  <div className="kpiLabel">{label}</div>
+                  {metricsSelected ? (
                     <>
                       <div className="kpiValueRow">
-                        <div className="kpiValue">{metricsSelected.demSinDespachar}</div>
-                        <div className="kpiDeltaRight">{prev != null ? <DeltaPill deltaPct={d} mode="lower_better" /> : <span className="sub">—</span>}</div>
+                        <div className="kpiValue">{cur}</div>
+                        <div className="kpiDeltaRight"><DeltaPill deltaPct={d} mode={cfg.mode} vsLabel={vsLabel} /></div>
                       </div>
-                      <div className="kpiSub">{prev != null ? <span className="mono">Anterior: {round0(prev).toLocaleString("es-AR")}</span> : "—"}</div>
+                      <div className="kpiSub">{prevVal != null ? <span className="mono">Anterior: {round0(prevVal).toLocaleString("es-AR")}</span> : "—"}</div>
                     </>
-                  );
-                })()
-              ) : (
-                <>
-                  <div className="kpiValueRow">
-                    <div className="kpiValue">—</div>
-                    <div className="kpiDeltaRight">
-                      <span className="sub">—</span>
-                    </div>
-                  </div>
-                  <div className="kpiSub">—</div>
-                </>
-              )}
-            </div>
-            <div
-              className={`kpiSmall ${
-                metricsSelected
-                  ? deltaBgClass(
-                      deltaBgTone(
-                        stableDeltaPctFor(`${petshopId}|${from}|${to}|vuelta1`),
-                        KPI_DELTA_BG.vuelta1.mode,
-                        KPI_DELTA_BG.vuelta1.neutralAbsPct
-                      )
-                    )
-                  : "kpiBgNeutral"
-              }`}
-            >
-              <div className="kpiLabel">1ra vuelta</div>
-              {metricsSelected ? (
-                (() => {
-                  const d = stableDeltaPctFor(`${petshopId}|${from}|${to}|vuelta1`);
-                  const prev = previousFromDelta(metricsSelected.vuelta1 ?? 0, d);
-                  return (
+                  ) : (
                     <>
-                      <div className="kpiValueRow">
-                        <div className="kpiValue">{metricsSelected.vuelta1}</div>
-                        <div className="kpiDeltaRight">{prev != null ? <DeltaPill deltaPct={d} mode="lower_better" /> : <span className="sub">—</span>}</div>
-                      </div>
-                      <div className="kpiSub">{prev != null ? <span className="mono">Anterior: {round0(prev).toLocaleString("es-AR")}</span> : "—"}</div>
+                      <div className="kpiValueRow"><div className="kpiValue">—</div><div className="kpiDeltaRight"><span className="sub">—</span></div></div>
+                      <div className="kpiSub">—</div>
                     </>
-                  );
-                })()
-              ) : (
-                <>
-                  <div className="kpiValueRow">
-                    <div className="kpiValue">—</div>
-                    <div className="kpiDeltaRight">
-                      <span className="sub">—</span>
-                    </div>
-                  </div>
-                  <div className="kpiSub">—</div>
-                </>
-              )}
-            </div>
-            <div
-              className={`kpiSmall ${
-                metricsSelected
-                  ? deltaBgClass(
-                      deltaBgTone(
-                        stableDeltaPctFor(`${petshopId}|${from}|${to}|vuelta2`),
-                        KPI_DELTA_BG.vuelta2.mode,
-                        KPI_DELTA_BG.vuelta2.neutralAbsPct
-                      )
-                    )
-                  : "kpiBgNeutral"
-              }`}
-            >
-              <div className="kpiLabel">2da vuelta</div>
-              {metricsSelected ? (
-                (() => {
-                  const d = stableDeltaPctFor(`${petshopId}|${from}|${to}|vuelta2`);
-                  const prev = previousFromDelta(metricsSelected.vuelta2 ?? 0, d);
-                  return (
-                    <>
-                      <div className="kpiValueRow">
-                        <div className="kpiValue">{metricsSelected.vuelta2}</div>
-                        <div className="kpiDeltaRight">{prev != null ? <DeltaPill deltaPct={d} mode="lower_better" /> : <span className="sub">—</span>}</div>
-                      </div>
-                      <div className="kpiSub">{prev != null ? <span className="mono">Anterior: {round0(prev).toLocaleString("es-AR")}</span> : "—"}</div>
-                    </>
-                  );
-                })()
-              ) : (
-                <>
-                  <div className="kpiValueRow">
-                    <div className="kpiValue">—</div>
-                    <div className="kpiDeltaRight">
-                      <span className="sub">—</span>
-                    </div>
-                  </div>
-                  <div className="kpiSub">—</div>
-                </>
-              )}
-            </div>
-            <div
-              className={`kpiSmall kpiSmallWide ${
-                metricsSelected
-                  ? deltaBgClass(
-                      deltaBgTone(
-                        stableDeltaPctFor(`${petshopId}|${from}|${to}|cancel`),
-                        KPI_DELTA_BG.cancel.mode,
-                        KPI_DELTA_BG.cancel.neutralAbsPct
-                      )
-                    )
-                  : "kpiBgNeutral"
-              }`}
-            >
-              <div className="kpiLabel">Cancelados</div>
-              {metricsSelected ? (
-                (() => {
-                  const d = stableDeltaPctFor(`${petshopId}|${from}|${to}|cancel`);
-                  const prev = previousFromDelta(metricsSelected.cancel ?? 0, d);
-                  return (
-                    <>
-                      <div className="kpiValueRow">
-                        <div className="kpiValue">{metricsSelected.cancel}</div>
-                        <div className="kpiDeltaRight">{prev != null ? <DeltaPill deltaPct={d} mode="lower_better" /> : <span className="sub">—</span>}</div>
-                      </div>
-                      <div className="kpiSub">{prev != null ? <span className="mono">Anterior: {round0(prev).toLocaleString("es-AR")}</span> : "—"}</div>
-                    </>
-                  );
-                })()
-              ) : (
-                <>
-                  <div className="kpiValueRow">
-                    <div className="kpiValue">—</div>
-                    <div className="kpiDeltaRight">
-                      <span className="sub">—</span>
-                    </div>
-                  </div>
-                  <div className="kpiSub">—</div>
-                </>
-              )}
-            </div>
-            <div
-              className={`kpiSmall kpiSmallWide ${
-                metricsSelected
-                  ? deltaBgClass(
-                      deltaBgTone(
-                        stableDeltaPctFor(`${petshopId}|${from}|${to}|reprog`),
-                        KPI_DELTA_BG.reprog.mode,
-                        KPI_DELTA_BG.reprog.neutralAbsPct
-                      )
-                    )
-                  : "kpiBgNeutral"
-              }`}
-            >
-              <div className="kpiLabel">Reprogramar</div>
-              {metricsSelected ? (
-                (() => {
-                  const d = stableDeltaPctFor(`${petshopId}|${from}|${to}|reprog`);
-                  const prev = previousFromDelta(metricsSelected.reprog ?? 0, d);
-                  return (
-                    <>
-                      <div className="kpiValueRow">
-                        <div className="kpiValue">{metricsSelected.reprog}</div>
-                        <div className="kpiDeltaRight">{prev != null ? <DeltaPill deltaPct={d} mode="lower_better" /> : <span className="sub">—</span>}</div>
-                      </div>
-                      <div className="kpiSub">{prev != null ? <span className="mono">Anterior: {round0(prev).toLocaleString("es-AR")}</span> : "—"}</div>
-                    </>
-                  );
-                })()
-              ) : (
-                <>
-                  <div className="kpiValueRow">
-                    <div className="kpiValue">—</div>
-                    <div className="kpiDeltaRight">
-                      <span className="sub">—</span>
-                    </div>
-                  </div>
-                  <div className="kpiSub">—</div>
-                </>
-              )}
-            </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 
