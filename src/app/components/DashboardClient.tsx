@@ -33,7 +33,7 @@ const QUICK_ACCESS: QuickAccessItem[] = [
   { topic: "Capacidad", id: "capacidad", label: "Capacidad logística" },
   { topic: "Operación", id: "demoras", label: "1ra/2da vuelta" },
   { topic: "En vivo", id: "top3", label: "Top 3 petshops" },
-  { topic: "En vivo", id: "sl-live", label: "Service level (SL)" },
+  { topic: "En vivo", id: "sl-live", label: "Resumen por petshop" },
   { topic: "Riesgo", id: "cancelados", label: "Cancelados" },
   { topic: "Riesgo", id: "spliteados", label: "Pedidos spliteados" },
   { topic: "Post-venta", id: "soluciones", label: "Soluciones / Devoluciones / Retiros" },
@@ -133,23 +133,23 @@ function cancelTone(cancelPct: number) {
  * Umbrales de estado para Service Level (visual / operativo).
  * Tratamos SL% como un “health metric” con OK / Revisar / Crítico.
  */
-function badgeClassBySl(slPct: number) {
-  const t = slTone(slPct);
+function badgeClassByOnTime(onTimePct: number) {
+  const t = onTimeTone(onTimePct);
   if (t === "ok") return "pill badgeOk";
   if (t === "warn") return "pill badgeWarn";
   return "pill badgeBad";
 }
 
-function slStatus(slPct: number) {
-  const t = slTone(slPct);
+function onTimeStatus(onTimePct: number) {
+  const t = onTimeTone(onTimePct);
   if (t === "ok") return "OK";
   if (t === "warn") return "Revisar";
   return "Crítico";
 }
 
-function SlProgress({ slPct }: { slPct: number }) {
-  const w = clamp(slPct, 0, 100);
-  const color = toneColor(slTone(slPct));
+function SlProgress({ pct: pctVal }: { pct: number }) {
+  const w = clamp(pctVal, 0, 100);
+  const color = toneColor(onTimeTone(pctVal));
   return (
     <div className="bar" aria-hidden="true">
       <div style={{ width: `${w}%`, background: color }} />
@@ -1111,7 +1111,7 @@ export default function DashboardClient() {
     if (!data) return [];
     const rows = data.metricsByPetshop.map((m) => ({
       ...m,
-      status: slStatus(m.slPct),
+      status: onTimeStatus(m.onTimePct),
     }));
     if (petshopId === "ALL") return rows;
     return rows.filter((r) => r.petshopId === petshopId);
@@ -2343,17 +2343,7 @@ export default function DashboardClient() {
               const dSl = stableDeltaPctFor(`${petshopId}|${from}|${to}|${petshopId === "ALL" ? "slPctAvg" : "slPct"}`);
 
               return (
-                <div className="kpiMiniGrid kpiMiniBelow" aria-label="On-time y Service level">
-                  <div className={`kpiMiniBox ${deltaBgClass(deltaBgTone(dSl, KPI_DELTA_BG.sl.mode, KPI_DELTA_BG.sl.neutralAbsPct))}`}>
-                    <div className="kpiMiniLabel">{petshopId === "ALL" ? "Service level (prom.)" : "Service level"}</div>
-                    <div className="kpiMiniRow">
-                      <div className="kpiMiniValue mono">{slPct != null ? formatPct0(slPct) : "—"}</div>
-                      <div className="kpiMiniDelta">
-                        {slPct != null ? <DeltaPill deltaPct={dSl} mode="higher_better" /> : <span className="sub">—</span>}
-                      </div>
-                    </div>
-                  </div>
-
+                <div className="kpiMiniGrid kpiMiniBelow" aria-label="On-time" style={{ gridTemplateColumns: "1fr" }}>
                   <div className={`kpiMiniBox ${deltaBgClass(deltaBgTone(dOnTime, KPI_DELTA_BG.onTime.mode, KPI_DELTA_BG.onTime.neutralAbsPct))}`}>
                     <div className="kpiMiniLabel">On-time</div>
                     <div className="kpiMiniRow">
@@ -2698,8 +2688,8 @@ export default function DashboardClient() {
       <section className="section" id="sl-live">
         <div className="sectionHeader">
           <div>
-            <h2>Service level (SL) en tiempo real</h2>
-            <p>SL = % entregadas sobre creadas</p>
+            <h2>Resumen operativo por petshop</h2>
+            <p>Entregas, on-time, cancelados y progreso por petshop en el período seleccionado</p>
           </div>
         </div>
         <div className="tableScroll">
@@ -2708,7 +2698,6 @@ export default function DashboardClient() {
               <thead>
                 <tr>
                   <th>Petshop</th>
-                  <th>SL %</th>
                   <th>On-time</th>
                   <th>Out-time</th>
                   <th>Cancelados</th>
@@ -2722,7 +2711,6 @@ export default function DashboardClient() {
                 {slRows.map((r) => (
                   <tr key={r.petshopId}>
                     <td>{r.petshopName}</td>
-                    <td style={{ color: toneColor(slTone(r.slPct)) }}>{formatPct0(r.slPct)} ({r.delivered.toLocaleString("es-AR")})</td>
                     <td style={{ color: toneColor(onTimeTone(r.onTimePct)) }}>
                       {formatPct0(r.onTimePct)} ({r.onTimeN.toLocaleString("es-AR")})
                     </td>
@@ -2733,12 +2721,12 @@ export default function DashboardClient() {
                       {formatPct0(r.cancelPct)} ({r.cancel.toLocaleString("es-AR")})
                     </td>
                     <td>
-                      <span className={badgeClassBySl(r.slPct)}>{slStatus(r.slPct)}</span>
+                      <span className={badgeClassByOnTime(r.onTimePct)}>{onTimeStatus(r.onTimePct)}</span>
                     </td>
                     <td className="mono">{r.total.toLocaleString("es-AR")}</td>
                     <td className="mono">{r.delivered.toLocaleString("es-AR")}</td>
                     <td>
-                      <SlProgress slPct={r.slPct} />
+                      <SlProgress pct={r.onTimePct} />
                     </td>
                   </tr>
                 ))}
@@ -2751,7 +2739,6 @@ export default function DashboardClient() {
                   <th>Petshop</th>
                   <th>Creadas</th>
                   <th>Entregadas</th>
-                  <th>SL %</th>
                   <th>On-time</th>
                   <th>Out-time</th>
                   <th>Cancelados</th>
@@ -2765,7 +2752,6 @@ export default function DashboardClient() {
                     <td>{r.petshopName}</td>
                     <td className="mono">{r.total.toLocaleString("es-AR")}</td>
                     <td className="mono">{r.delivered.toLocaleString("es-AR")}</td>
-                    <td style={{ color: toneColor(slTone(r.slPct)) }}>{formatPct0(r.slPct)} ({r.delivered.toLocaleString("es-AR")})</td>
                     <td style={{ color: toneColor(onTimeTone(r.onTimePct)) }}>
                       {formatPct0(r.onTimePct)} ({r.onTimeN.toLocaleString("es-AR")})
                     </td>
@@ -2776,10 +2762,10 @@ export default function DashboardClient() {
                       {formatPct0(r.cancelPct)} ({r.cancel.toLocaleString("es-AR")})
                     </td>
                     <td>
-                      <SlProgress slPct={r.slPct} />
+                      <SlProgress pct={r.onTimePct} />
                     </td>
                     <td>
-                      <span className={badgeClassBySl(r.slPct)}>{slStatus(r.slPct)}</span>
+                      <span className={badgeClassByOnTime(r.onTimePct)}>{onTimeStatus(r.onTimePct)}</span>
                     </td>
                   </tr>
                 ))}
@@ -2817,7 +2803,6 @@ export default function DashboardClient() {
             <div className="miniHeader">
               <div className="miniTitle">Clientes cancelados — nuevos vs recurrentes</div>
             </div>
-            <div className="note noteWarn">Integración con Wizard pendiente</div>
             <Doughnut
               aLabel="Nuevos"
               aValue={round0((metricsSelected?.cancel ?? 0) * 0.6)}
