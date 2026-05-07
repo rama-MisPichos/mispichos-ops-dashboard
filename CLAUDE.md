@@ -40,8 +40,8 @@ GET /api/ops/dashboard?from=&to=
 
 | Archivo | Rol |
 |---|---|
-| `src/app/components/DashboardClient.tsx` | Toda la UI (~3500 líneas). Componente "god" client-side |
-| `src/lib/data/mockOpsDashboard.ts` | Mock + **tipos principales** (`OpsDashboardResponse`, `PetshopMetrics`, `ReprogramarRow`, etc.) |
+| `src/app/components/DashboardClient.tsx` | Toda la UI (~4200 líneas). Componente "god" client-side |
+| `src/lib/data/mockOpsDashboard.ts` | Mock + **tipos principales** (`OpsDashboardResponse`, `PetshopMetrics`, `ReprogramarRow`, `VueltaRow`, etc.) |
 | `src/app/globals.css` | Todos los estilos. Variables de tema, layout, componentes |
 | `src/app/api/ops/dashboard/route.ts` | Único endpoint activo del dashboard |
 | `src/app/api/ai/recommendations/route.ts` | POST con KPIs → prompt a Gemini → texto de recomendaciones |
@@ -56,13 +56,31 @@ GET /api/ops/dashboard?from=&to=
 
 **KPI thresholds:** definidos inline con `toneByRate(rate01, warnAt, badAt)` y `toneByHighIsBad`/`toneByLowIsBad`. Para cambiar umbrales, buscar el KPI específico en `DashboardClient.tsx`.
 
-**Deltas vs ayer:** en mock no hay serie real de "ayer". Se usa `stableDeltaPctFor(key)` — hash determinístico de la key `petshopId|from|to|metrica` — para que los deltas sean estables por contexto sin cambiar en re-renders. `KPI_DELTA_BG` configura el modo (higher/lower better) y la banda neutral por KPI.
+**Deltas / comparación de períodos:** el sistema tiene dos capas:
+1. `stableDeltaPctFor(key)` — hash determinístico usado como fallback mock (nunca debe quedar como única fuente cuando haya datos reales).
+2. **Datos reales del período anterior** — `activePrevPeriod` calcula `prevFrom`/`prevTo` y se hace un segundo fetch a la misma API. Los deltas se calculan como `((current - prev) / |prev|) * 100`. `KPI_DELTA_BG` configura el modo (higher/lower better) y la banda neutral por KPI.
 
-**Paginación:** `PAGE_SIZE = 5` para todas las tablas. Cada tabla tiene su propio estado de página. Las cuatro tablas de incidencias (reprogramar, sinDespachar, cancelados, cerradosManual) comparten una sola sección con selector `incidenciasTab`.
+**Modos de comparación (`compareMode`):** selector "Comparar" en el chipRow con 4 opciones:
+- `"daily"` — período previo = misma ventana de días desplazada hacia atrás (1 día → "vs día ant.", N días → "vs período ant.")
+- `"weekly"` — esta semana (desde el lunes) vs la semana anterior. Auto-setea `from`/`to`.
+- `"biweekly"` — las últimas 2 semanas vs las 2 semanas previas. Auto-setea `from`/`to`.
+- `"monthly"` — este mes calendario vs el mes anterior. Auto-setea `from`/`to`.
+
+Cuando el usuario cambia el rango manualmente desde el calendario, `compareMode` se resetea a `"daily"`. `presetPeriod` calcula los rangos para weekly/biweekly/monthly; `activePrevPeriod` los unifica con daily y es el que dispara el fetch de `prevData`. `prevMetricsAll` y `prevMetricsSelected` replican la misma lógica de agregación que `metricsAll`/`metricsSelected` pero sobre `prevData`. `DeltaPill` acepta `vsLabel` opcional (default `"ayer"`) que se propaga desde `activePrevPeriod.vsLabel`.
+
+**Service Level eliminado:** la columna SL% fue removida del dashboard por decisión de negocio. Quedan `onTimeTone`, `onTimeStatus`, `badgeClassByOnTime` y `SlProgress` (ahora basado en on-time %). Las funciones `slTone`/`slStatus`/`badgeClassBySl` ya no existen.
+
+**Paginación:** `PAGE_SIZE = 5` para todas las tablas. Cada tabla tiene su propio estado de página. Las tablas de incidencias (reprogramar, sinDespachar, cancelados, cerradosManual, vuelta1, vuelta2) comparten una sola sección con selector `incidenciasTab`.
+
+**Tipos de incidencias disponibles en `incidenciasTab`:** `"reprogramar" | "sinDespachar" | "cancelados" | "cerradosManual" | "vuelta1" | "vuelta2"`. Los rows de vuelta (`VueltaRow`) tienen `attemptAt` (timestamp del intento) y `waitHours`. 1ra vuelta = intento hace 24–48hs; 2da vuelta = intento hace >48hs. Colores de horas: vuelta1 warn≥24h bad>36h; vuelta2 warn≥48h bad>72h.
+
+**Gráfico de capacidad horaria (`LineHourly`):** reemplaza al anterior `LineMini` (que usaba datos diarios). Usa `capacity.flex.hourly` / `capacity.franja.hourly` rellenados con `fillHours24()`. Tiene hover interactivo (tooltip con hora y % usado), marcador de hora actual, área fill y etiquetas en eje X cada ~4 horas.
 
 **Copiar/exportar:** `toFixedWidthTable` para Wpp, `toHtmlTable` para Mail (con fallback a texto plano), `toCsv` + `downloadTextFile` para Excel.
 
-**Sidebar de accesos rápidos:** en desktop usa `qaDockOpen` (panel lateral) con animación vía `qaAnimClass` (`"qaEntering"` / `"qaExiting"`). En mobile usa `quickAccessOpen` (modal). Estado persistido en `localStorage` bajo la key `opsQuickAccess:dockOpen:v1`.
+**Sidebar de accesos rápidos:** en desktop usa `qaDockOpen` (panel lateral) con animación vía `qaAnimClass` (`"qaEntering"` / `"qaExiting"`). Funciones `openQaSidebar` / `closeQaSidebar` / `toggleQaSidebar` manejan el timer de animación con `qaTimerRef`. En mobile usa `quickAccessOpen` (modal). El botón `qaToggleBtn` está en el topbar, antes del título. Estado persistido en `localStorage` bajo la key `opsQuickAccess:dockOpen:v1`.
+
+**Autenticación:** login básico vía `DASHBOARD_USER` / `DASHBOARD_PASSWORD` en `.env.local`. El endpoint `/api/auth/login` valida credenciales. Sin esas variables el fallback es `ops` / `mispichos2025`.
 
 **LocalStorage keys:**
 - `opsTheme:v1` — tema (dark/light)
@@ -71,3 +89,10 @@ GET /api/ops/dashboard?from=&to=
 
 ### Secciones del dashboard (IDs de anclaje)
 `ops-live` → `capacidad` → `demoras` → `top3` → `sl-live` → `cancelados` → `spliteados` → `soluciones` → `estancados` → `incidencias`
+
+### Integración con Core API real
+Reemplazar `src/lib/data/mockOpsDashboard.ts` con un adaptador que devuelva `OpsDashboardResponse`. El contrato de tipos **no debe cambiar**. Campos clave por orden de prioridad de integración:
+1. `metricsByPetshop[]` — agrega todos los KPIs de la sección superior
+2. `reprogramarRows`, `sinDespacharRows`, `canceladosRows`, `cerradosManualmenteRows`, `vuelta1Rows`, `vuelta2Rows` — tablas de incidencias
+3. `capacity` (a través de `capacityFlexHourly`, `capacityFranjaHourly`, `capacityAssignedNext7`) — sección de capacidad
+4. `petshops[]` — selector de petshop y capacidad configurada

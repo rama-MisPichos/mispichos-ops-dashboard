@@ -1678,6 +1678,17 @@ table{
   min-width: 760px;
 }
 
+.tableScrollCompact table{
+  min-width: 0;
+  width: 100%;
+}
+
+.tableScrollCompact th,
+.tableScrollCompact td{
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+
 .tableFixed{
   table-layout: fixed;
 }
