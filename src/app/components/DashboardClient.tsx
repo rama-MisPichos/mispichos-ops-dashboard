@@ -3824,7 +3824,7 @@ export default function DashboardClient() {
                 ✕
               </button>
             </div>
-            <div className="tableScroll">
+            <div className="tableScroll tableScrollCompact">
               <table>
                 <thead>
                   <tr>
@@ -3865,7 +3865,7 @@ export default function DashboardClient() {
                 ✕
               </button>
             </div>
-            <div className="tableScroll">
+            <div className="tableScroll tableScrollCompact">
               <table>
                 <thead>
                   <tr>
