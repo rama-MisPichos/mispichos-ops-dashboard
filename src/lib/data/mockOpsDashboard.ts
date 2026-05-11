@@ -129,6 +129,15 @@ export type PetshopMetrics = {
   /** % entregadas fuera de tiempo sobre (creadas - canceladas) */
   outTimePct: number;
 
+  /**
+   * Entregadas a tiempo desagregadas por ventana (suman `onTimeN`).
+   * FC = franja corta por horario; Flex = franja larga 14–22.
+   */
+  onTimeShort1014N: number;
+  onTimeShort1418N: number;
+  onTimeShort1822N: number;
+  onTimeFlex1422N: number;
+
   // SL
   slPct: number;
 
@@ -455,6 +464,37 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
     const onTimePct = clamp((onTimeN / Math.max(1, eligible)) * 100, 0, 100);
     const outTimePct = clamp((outTimeN / Math.max(1, eligible)) * 100, 0, 100);
 
+    // Reparto de entregas a tiempo por ventana (solo buckets habilitados para el petshop).
+    const onTimeWinBuckets: { key: "10-14" | "14-18" | "18-22" | "14-22"; enabled: boolean }[] = [
+      { key: "10-14", enabled: ps.capacity.shortEnabled["10-14"] },
+      { key: "14-18", enabled: ps.capacity.shortEnabled["14-18"] },
+      { key: "18-22", enabled: ps.capacity.shortEnabled["18-22"] },
+      { key: "14-22", enabled: ps.capacity.flexEnabled },
+    ];
+    const enabledOnTimeBuckets = onTimeWinBuckets.filter((b) => b.enabled);
+    const onTimeWinWeights = enabledOnTimeBuckets.map(() => 0.55 + rnd() * 1.1);
+    const onTimeWinCounts =
+      onTimeN <= 0
+        ? []
+        : enabledOnTimeBuckets.length
+          ? distributeByWeights(onTimeN, onTimeWinWeights, rnd)
+          : distributeByWeights(onTimeN, [1, 1, 1], rnd); // fallback: reparto solo FC estándar
+    const onTimeCountFor = (key: "10-14" | "14-18" | "18-22" | "14-22") => {
+      if (!enabledOnTimeBuckets.length) {
+        if (key === "10-14") return onTimeWinCounts[0] ?? 0;
+        if (key === "14-18") return onTimeWinCounts[1] ?? 0;
+        if (key === "18-22") return onTimeWinCounts[2] ?? 0;
+        return 0;
+      }
+      const i = enabledOnTimeBuckets.findIndex((b) => b.key === key);
+      if (i < 0) return 0;
+      return onTimeWinCounts[i] ?? 0;
+    };
+    const onTimeShort1014N = onTimeCountFor("10-14");
+    const onTimeShort1418N = onTimeCountFor("14-18");
+    const onTimeShort1822N = onTimeCountFor("18-22");
+    const onTimeFlex1422N = onTimeCountFor("14-22");
+
     const slPct = clamp((delivered / Math.max(1, baseTotal)) * 100, 0, 100);
 
     const manualCloseLast7: ManualCloseBucket[] = [];
@@ -632,6 +672,10 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
       outTimeTx,
       onTimePct,
       outTimePct,
+      onTimeShort1014N,
+      onTimeShort1418N,
+      onTimeShort1822N,
+      onTimeFlex1422N,
       slPct,
       manualCloseLast7,
       cancelNewVsRec,

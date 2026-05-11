@@ -11,7 +11,7 @@
  */
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type {
   CanceladoRow,
   CancellationReasonBucket,
@@ -224,6 +224,7 @@ function Doughnut({
   aAuxValue,
   bAuxValue,
   auxLabel,
+  chartAside,
 }: {
   aLabel: string;
   aValue: number;
@@ -236,6 +237,8 @@ function Doughnut({
   bAuxValue?: number;
   /** Texto para el valor auxiliar (ej: "tx") */
   auxLabel?: string;
+  /** Columna derecha; donut + leyenda principal siguen el layout centrado habitual. */
+  chartAside?: ReactNode;
 }) {
   const total = Math.max(1, aValue + bValue);
   const aPct = aValue / total;
@@ -244,71 +247,91 @@ function Doughnut({
   const c = 2 * Math.PI * r;
   const aStroke = c * aPct;
 
-  return (
-    <div className="donutWrap">
-      <svg viewBox="0 0 120 120" className="donut" role="img" aria-label="Doughnut">
-        <circle cx="60" cy="60" r={r} fill="none" stroke="var(--border)" strokeWidth="14" />
-        <circle
-          cx="60"
-          cy="60"
-          r={r}
-          fill="none"
-          stroke={aColor}
-          strokeWidth="14"
-          strokeDasharray={`${aStroke} ${c - aStroke}`}
-          strokeDashoffset={c * 0.25}
-          strokeLinecap="butt"
-        />
-        <circle
-          cx="60"
-          cy="60"
-          r={r}
-          fill="none"
-          stroke={bColor}
-          strokeWidth="14"
-          strokeDasharray={`${c - aStroke} ${aStroke}`}
-          strokeDashoffset={c * 0.25 - aStroke}
-          strokeLinecap="butt"
-        />
-      </svg>
-      <div className={`donutLegend ${legendLayout === "twoCol" ? "donutLegendTwoCol" : ""}`}>
-        <div className="donutLegendItem">
-          <span className="legendSwatch" style={{ background: aColor }} />
-          <div>
-            <div className="legendTop">
-              <span>{aLabel}</span>
-            </div>
-            <div className="donutLegendMetric">
-              <span className="donutLegendPct mono">{formatPct0((aValue / total) * 100)}</span>{" "}
-              <span className="donutLegendCount mono">({aValue.toLocaleString("es-AR")})</span>
-            </div>
-            {typeof aAuxValue === "number" ? (
-              <div className="donutLegendAux mono">
-                {auxLabel ? `${auxLabel}: ` : ""}
-                {aAuxValue.toLocaleString("es-AR")}
-              </div>
-            ) : null}
+  const svgDonut = (
+    <svg viewBox="0 0 120 120" className="donut" role="img" aria-label="Doughnut">
+      <circle cx="60" cy="60" r={r} fill="none" stroke="var(--border)" strokeWidth="14" />
+      <circle
+        cx="60"
+        cy="60"
+        r={r}
+        fill="none"
+        stroke={aColor}
+        strokeWidth="14"
+        strokeDasharray={`${aStroke} ${c - aStroke}`}
+        strokeDashoffset={c * 0.25}
+        strokeLinecap="butt"
+      />
+      <circle
+        cx="60"
+        cy="60"
+        r={r}
+        fill="none"
+        stroke={bColor}
+        strokeWidth="14"
+        strokeDasharray={`${c - aStroke} ${aStroke}`}
+        strokeDashoffset={c * 0.25 - aStroke}
+        strokeLinecap="butt"
+      />
+    </svg>
+  );
+
+  const legend = (
+    <div className={`donutLegend ${legendLayout === "twoCol" ? "donutLegendTwoCol" : ""}`}>
+      <div className="donutLegendItem">
+        <span className="legendSwatch" style={{ background: aColor }} />
+        <div>
+          <div className="legendTop">
+            <span>{aLabel}</span>
           </div>
-        </div>
-        <div className="donutLegendItem">
-          <span className="legendSwatch" style={{ background: bColor }} />
-          <div>
-            <div className="legendTop">
-              <span>{bLabel}</span>
-            </div>
-            <div className="donutLegendMetric">
-              <span className="donutLegendPct mono">{formatPct0((bValue / total) * 100)}</span>{" "}
-              <span className="donutLegendCount mono">({bValue.toLocaleString("es-AR")})</span>
-            </div>
-            {typeof bAuxValue === "number" ? (
-              <div className="donutLegendAux mono">
-                {auxLabel ? `${auxLabel}: ` : ""}
-                {bAuxValue.toLocaleString("es-AR")}
-              </div>
-            ) : null}
+          <div className="donutLegendMetric">
+            <span className="donutLegendPct mono">{formatPct0((aValue / total) * 100)}</span>{" "}
+            <span className="donutLegendCount mono">({aValue.toLocaleString("es-AR")})</span>
           </div>
+          {typeof aAuxValue === "number" ? (
+            <div className="donutLegendAux mono">
+              {auxLabel ? `${auxLabel}: ` : ""}
+              {aAuxValue.toLocaleString("es-AR")}
+            </div>
+          ) : null}
         </div>
       </div>
+      <div className="donutLegendItem">
+        <span className="legendSwatch" style={{ background: bColor }} />
+        <div>
+          <div className="legendTop">
+            <span>{bLabel}</span>
+          </div>
+          <div className="donutLegendMetric">
+            <span className="donutLegendPct mono">{formatPct0((bValue / total) * 100)}</span>{" "}
+            <span className="donutLegendCount mono">({bValue.toLocaleString("es-AR")})</span>
+          </div>
+          {typeof bAuxValue === "number" ? (
+            <div className="donutLegendAux mono">
+              {auxLabel ? `${auxLabel}: ` : ""}
+              {bAuxValue.toLocaleString("es-AR")}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className={`donutWrap${chartAside ? " donutWrapWithAside" : ""}`}>
+      {chartAside ? (
+        <div className="donutSplitBody">
+          <div className="donutMainColumn">
+            {svgDonut}
+            {legend}
+          </div>
+          <div className="donutSplitTrail">{chartAside}</div>
+        </div>
+      ) : (
+        <>
+          {svgDonut}
+          {legend}
+        </>
+      )}
     </div>
   );
 }
@@ -1141,6 +1164,10 @@ export default function DashboardClient() {
     const outTimeN = sum((m) => m.outTimeN);
     const onTimeTx = sum((m) => m.onTimeTx);
     const outTimeTx = sum((m) => m.outTimeTx);
+    const onTimeShort1014N = sum((m) => m.onTimeShort1014N);
+    const onTimeShort1418N = sum((m) => m.onTimeShort1418N);
+    const onTimeShort1822N = sum((m) => m.onTimeShort1822N);
+    const onTimeFlex1422N = sum((m) => m.onTimeFlex1422N);
     const eligible = Math.max(0, total - cancel);
 
     const slPct = pct(delivered, total);
@@ -1175,6 +1202,10 @@ export default function DashboardClient() {
       outTimeTx,
       onTimePct: pct(onTimeN, eligible),
       outTimePct: pct(outTimeN, eligible),
+      onTimeShort1014N,
+      onTimeShort1418N,
+      onTimeShort1822N,
+      onTimeFlex1422N,
       slPct,
     };
   }, [data?.metricsByPetshop]);
@@ -2680,6 +2711,36 @@ export default function DashboardClient() {
               bAuxValue={metricsSelected?.outTimeTx ?? 0}
               auxLabel="tx"
               legendLayout="twoCol"
+              chartAside={
+                metricsSelected && (metricsSelected.onTimeN ?? 0) > 0 ? (
+                  <div className="onTimeFranjaAside" role="group" aria-label="Distribución del total a tiempo por franja">
+                    <div className="onTimeFranjaAsideTitle">Del total a tiempo</div>
+                    {(
+                      [
+                        { label: "FC 10–14", n: metricsSelected.onTimeShort1014N ?? 0, swatchClass: "onTimeFranjaSw1014" },
+                        { label: "FC 14–18", n: metricsSelected.onTimeShort1418N ?? 0, swatchClass: "onTimeFranjaSw1418" },
+                        { label: "FC 18–22", n: metricsSelected.onTimeShort1822N ?? 0, swatchClass: "onTimeFranjaSw1822" },
+                        { label: "Franja Flex 14–22", n: metricsSelected.onTimeFlex1422N ?? 0, swatchClass: "onTimeFranjaSwFlex" },
+                      ] as const
+                    ).map((row) => {
+                      const base = Math.max(1, metricsSelected.onTimeN ?? 0);
+                      const p = pct(row.n, base);
+                      return (
+                        <div key={row.label} className="onTimeFranjaRow">
+                          <span className={`onTimeFranjaSw ${row.swatchClass}`} aria-hidden />
+                          <div className="onTimeFranjaRowMain">
+                            <div className="onTimeFranjaLabel">{row.label}</div>
+                            <div className="onTimeFranjaMetric mono">
+                              <span className="onTimeFranjaPct">{formatPct0(p)}</span>
+                              <span className="onTimeFranjaCount"> ({row.n.toLocaleString("es-AR")})</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null
+              }
             />
           </div>
         </div>
