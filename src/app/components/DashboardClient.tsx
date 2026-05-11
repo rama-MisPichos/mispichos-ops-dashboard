@@ -2502,57 +2502,51 @@ export default function DashboardClient() {
                   : "kpiBgNeutral"
               }`}
             >
-              <div className="kpiLabel">Total pedidos</div>
-              <div className="kpiValueRow">
-                <div className="kpiValue">{metricsSelected ? metricsSelected.total.toLocaleString("es-AR") : "—"}</div>
-                <div className="kpiDeltaRight">
-                  {metricsSelected && totalDeltaPct != null ? <DeltaPill deltaPct={totalDeltaPct} mode="higher_better" vsLabel={vsLabel} /> : <span className="sub">—</span>}
+              <div>
+                <div className="kpiLabel">Total pedidos</div>
+                <div className="kpiValueRow">
+                  <div className="kpiValue">{metricsSelected ? metricsSelected.total.toLocaleString("es-AR") : "—"}</div>
+                  <div className="kpiDeltaRight">
+                    {metricsSelected && totalDeltaPct != null ? <DeltaPill deltaPct={totalDeltaPct} mode="higher_better" vsLabel={vsLabel} /> : <span className="sub">—</span>}
+                  </div>
+                </div>
+                <div className="kpiSub">
+                  {metricsSelected && totalDeltaPct != null ? (
+                    (() => {
+                      const prev = previousFromDelta(metricsSelected.total ?? 0, totalDeltaPct);
+                      return prev != null ? <span className="mono">Anterior: {round0(prev).toLocaleString("es-AR")}</span> : <span>—</span>;
+                    })()
+                  ) : (
+                    "—"
+                  )}
                 </div>
               </div>
-              <div className="kpiSub">
-                {metricsSelected && totalDeltaPct != null ? (
-                  (() => {
-                    const prev = previousFromDelta(metricsSelected.total ?? 0, totalDeltaPct);
-                    return prev != null ? <span className="mono">Anterior: {round0(prev).toLocaleString("es-AR")}</span> : <span>—</span>;
-                  })()
-                ) : (
-                  "—"
-                )}
-              </div>
-              <div className="kpiDetail">
-                <span className="kpiDetailLabel">Transacciones</span>
-                <span className="mono">{metricsSelected ? metricsSelected.transacciones.toLocaleString("es-AR") : "—"}</span>
-              </div>
-              <div className="kpiDetail">
-                <span className="kpiDetailLabel">GMV</span>
-                <span className="mono kpiGmvValue">
-                  {metricsSelected
-                    ? (metricsSelected.gmv ?? 0).toLocaleString("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 })
-                    : "—"}
-                </span>
+              <div style={{ flex: 1 }} />
+              <div>
+                <div className="kpiDivider" />
+                <div className="kpiDetail">
+                  <span className="kpiDetailLabel">Transacciones</span>
+                  <span className="mono">{metricsSelected ? metricsSelected.transacciones.toLocaleString("es-AR") : "—"}</span>
+                </div>
+                <div className="kpiDetail" style={{ marginTop: 6 }}>
+                  <span className="kpiDetailLabel">GMV Bruto</span>
+                  <span className="mono kpiGmvValue">
+                    {metricsSelected
+                      ? (metricsSelected.gmv ?? 0).toLocaleString("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 })
+                      : "—"}
+                  </span>
+                </div>
+                <div className="kpiDetail" style={{ marginTop: 4 }}>
+                  <span className="kpiDetailLabel">GMV Neto</span>
+                  <span className="mono kpiGmvValue">
+                    {metricsSelected
+                      ? Math.max(0, (metricsSelected.gmv ?? 0) - totalCanceladosArs).toLocaleString("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 })
+                      : "—"}
+                  </span>
+                </div>
               </div>
             </div>
 
-            {(() => {
-              // Mismo % que el doughnut "Entregas a tiempo": A tiempo / (A tiempo + Fuera de tiempo)
-              const onTimePct =
-                metricsSelected != null ? pct(metricsSelected.onTimeN ?? 0, (metricsSelected.onTimeN ?? 0) + (metricsSelected.outTimeN ?? 0)) : null;
-              const dOnTime = deltaFor(onTimePct ?? 0, prevMetricsSelected?.onTimePct, `${petshopId}|${from}|${to}|onTimePct`);
-
-              return (
-                <div className="kpiMiniGrid kpiMiniBelow" aria-label="On-time" style={{ gridTemplateColumns: "1fr" }}>
-                  <div className={`kpiMiniBox ${deltaBgClass(deltaBgTone(dOnTime, KPI_DELTA_BG.onTime.mode, KPI_DELTA_BG.onTime.neutralAbsPct))}`}>
-                    <div className="kpiMiniLabel">On-time</div>
-                    <div className="kpiMiniRow">
-                      <div className="kpiMiniValue mono">{onTimePct != null ? formatPct0(onTimePct) : "—"}</div>
-                      <div className="kpiMiniDelta">
-                        {onTimePct != null ? <DeltaPill deltaPct={dOnTime} mode="higher_better" vsLabel={vsLabel} /> : <span className="sub">—</span>}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
           </div>
 
           <div className="kpiSmallGrid">
@@ -2561,8 +2555,71 @@ export default function DashboardClient() {
                 { key: "demSinDespachar", label: "Demorado sin despachar", cls: "kpiSmall", cfg: KPI_DELTA_BG.demSinDespachar, cur: metricsSelected?.demSinDespachar, prv: prevMetricsSelected?.demSinDespachar },
                 { key: "vuelta1",         label: "1ra vuelta",             cls: "kpiSmall", cfg: KPI_DELTA_BG.vuelta1,         cur: metricsSelected?.vuelta1,         prv: prevMetricsSelected?.vuelta1 },
                 { key: "vuelta2",         label: "2da vuelta",             cls: "kpiSmall", cfg: KPI_DELTA_BG.vuelta2,         cur: metricsSelected?.vuelta2,         prv: prevMetricsSelected?.vuelta2 },
-                { key: "cancel",          label: "Cancelados",             cls: "kpiSmall kpiSmallWide", cfg: KPI_DELTA_BG.cancel,         cur: metricsSelected?.cancel,          prv: prevMetricsSelected?.cancel },
-                { key: "reprog",          label: "Reprogramar",            cls: "kpiSmall kpiSmallWide", cfg: KPI_DELTA_BG.reprog,          cur: metricsSelected?.reprog,          prv: prevMetricsSelected?.reprog },
+              ] as Array<{ key: string; label: string; cls: string; cfg: { mode: "higher_better" | "lower_better"; neutralAbsPct: number }; cur: number | undefined; prv: number | undefined }>
+            ).map(({ key, label, cls, cfg, cur, prv }) => {
+              const d = deltaFor(cur ?? 0, prv, `${petshopId}|${from}|${to}|${key}`);
+              const prevVal = prv != null ? prv : previousFromDelta(cur ?? 0, d);
+              return (
+                <div key={key} className={`${cls} ${metricsSelected ? deltaBgClass(deltaBgTone(d, cfg.mode, cfg.neutralAbsPct)) : "kpiBgNeutral"}`}>
+                  <div className="kpiLabel">{label}</div>
+                  {metricsSelected ? (
+                    <>
+                      <div className="kpiValueRow">
+                        <div className="kpiValue">{cur}</div>
+                        <div className="kpiDeltaRight"><DeltaPill deltaPct={d} mode={cfg.mode} vsLabel={vsLabel} /></div>
+                      </div>
+                      <div className="kpiSub">{prevVal != null ? <span className="mono">Anterior: {round0(prevVal).toLocaleString("es-AR")}</span> : "—"}</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="kpiValueRow"><div className="kpiValue">—</div><div className="kpiDeltaRight"><span className="sub">—</span></div></div>
+                      <div className="kpiSub">—</div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+
+            {(() => {
+              const onTimePct =
+                metricsSelected != null ? pct(metricsSelected.onTimeN ?? 0, (metricsSelected.onTimeN ?? 0) + (metricsSelected.outTimeN ?? 0)) : null;
+              const dOnTime = deltaFor(onTimePct ?? 0, prevMetricsSelected?.onTimePct, `${petshopId}|${from}|${to}|onTimePct`);
+              const prevOnTimePct = prevMetricsSelected?.onTimePct ?? null;
+              const onTimeN = metricsSelected?.onTimeN ?? 0;
+              const outTimeN = metricsSelected?.outTimeN ?? 0;
+              return (
+                <div className={`kpiSmall kpiSmallWide ${metricsSelected ? deltaBgClass(deltaBgTone(dOnTime, KPI_DELTA_BG.onTime.mode, KPI_DELTA_BG.onTime.neutralAbsPct)) : "kpiBgNeutral"}`}>
+                  <div className="kpiLabel">On-time</div>
+                  {metricsSelected ? (
+                    <>
+                      <div className="kpiValueRow">
+                        <div className="kpiValue">{onTimePct != null ? formatPct0(onTimePct) : "—"}</div>
+                        <div className="kpiDeltaRight">
+                          {onTimePct != null ? <DeltaPill deltaPct={dOnTime} mode="higher_better" vsLabel={vsLabel} /> : <span className="sub">—</span>}
+                        </div>
+                      </div>
+                      <div className="kpiSub">
+                        {prevOnTimePct != null ? (
+                          <><span className="mono">Anterior: {formatPct0(prevOnTimePct)}</span><span style={{ marginLeft: 8 }}>· {onTimeN.toLocaleString("es-AR")}/{(onTimeN + outTimeN).toLocaleString("es-AR")} entregas</span></>
+                        ) : onTimePct != null ? (
+                          <span className="mono">{onTimeN.toLocaleString("es-AR")}/{(onTimeN + outTimeN).toLocaleString("es-AR")} entregas</span>
+                        ) : "—"}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="kpiValueRow"><div className="kpiValue">—</div><div className="kpiDeltaRight"><span className="sub">—</span></div></div>
+                      <div className="kpiSub">—</div>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
+
+            {(
+              [
+                { key: "cancel", label: "Cancelados", cls: "kpiSmall kpiSmallWide", cfg: KPI_DELTA_BG.cancel, cur: metricsSelected?.cancel, prv: prevMetricsSelected?.cancel },
+                { key: "reprog", label: "Reprogramar", cls: "kpiSmall kpiSmallWide", cfg: KPI_DELTA_BG.reprog, cur: metricsSelected?.reprog, prv: prevMetricsSelected?.reprog },
               ] as Array<{ key: string; label: string; cls: string; cfg: { mode: "higher_better" | "lower_better"; neutralAbsPct: number }; cur: number | undefined; prv: number | undefined }>
             ).map(({ key, label, cls, cfg, cur, prv }) => {
               const d = deltaFor(cur ?? 0, prv, `${petshopId}|${from}|${to}|${key}`);

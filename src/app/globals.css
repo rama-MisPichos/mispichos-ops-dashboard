@@ -636,6 +636,9 @@ html[data-theme] *{
   background: var(--surface2);
   border-radius: var(--radius);
   padding: 10px 12px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .kpiMain.kpiBgNeutral{
@@ -785,13 +788,11 @@ html[data-theme] *{
 
 .kpiSmallGrid{
   display:grid;
-  /* 6 columns -> 3 cards on first row, 2 wide cards on second row */
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
 .kpiSmall{
-  grid-column: span 2;
   background: var(--surface2);
   border-radius: var(--radius);
   padding: 10px 12px;
@@ -815,7 +816,7 @@ html[data-theme] *{
 }
 
 .kpiSmallWide{
-  grid-column: span 3;
+  grid-column: span 1;
 }
 
 .kpiSmallWide .kpiValueRow{
