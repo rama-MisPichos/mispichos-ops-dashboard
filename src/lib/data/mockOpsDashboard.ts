@@ -88,6 +88,10 @@ export const CANCELLATION_REASONS: { key: CancellationReasonKey; label: string }
   { key: "customer_regrets", label: "Cliente se arrepiente" },
 ];
 
+/**
+ * KPIs por petshop en el período. El adaptador del Core API debe devolver objetos que cumplan
+ * las mismas ecuaciones que valida `validatePetshopMetrics` (ver `opsDashboardValidate.ts`).
+ */
 export type PetshopMetrics = {
   petshopId: string;
   petshopName: string;
@@ -196,6 +200,16 @@ function mulberry32(seed: number) {
   };
 }
 
+/** Semilla estable por rango de fechas (mock reproducible e independiente del “día de ejecución”). */
+function fnv1a32(str: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
@@ -262,6 +276,17 @@ function pickDeliveryWindow(rnd: () => number): OpsRowBase["deliveryWindow"] {
   return pick(rnd, ["10-14", "14-18", "18-22", "14-22"] as const);
 }
 
+/** Ventanas coherentes con la capacidad configurada del petshop (Core API debería hacer lo mismo). */
+function pickDeliveryWindowForPetshop(ps: Petshop, rnd: () => number): OpsRowBase["deliveryWindow"] {
+  const keys: NonNullable<OpsRowBase["deliveryWindow"]>[] = [];
+  if (ps.capacity.shortEnabled["10-14"]) keys.push("10-14");
+  if (ps.capacity.shortEnabled["14-18"]) keys.push("14-18");
+  if (ps.capacity.shortEnabled["18-22"]) keys.push("18-22");
+  if (ps.capacity.flexEnabled) keys.push("14-22");
+  if (!keys.length) return "14-18";
+  return keys[Math.floor(rnd() * keys.length)]!;
+}
+
 function dateWithWindow(base: Date, win: OpsRowBase["deliveryWindow"], rnd: () => number) {
   const d = new Date(base);
   const [a0, b0] = (win ?? "14-18").split("-").map((x) => Number(x));
@@ -298,7 +323,7 @@ function buildHourlyForHours(rnd: () => number, hours: number[], targetTotal: nu
 }
 
 export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboardResponse {
-  const rnd = mulberry32(99);
+  const rnd = mulberry32(fnv1a32(`${fromIso}|${toIso}`));
   const now = new Date();
 
   const petshops: Petshop[] = [
@@ -503,10 +528,8 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
       manualCloseLast7.push({ t: iso(addDays(last7Start, i)), count: round0(rnd() * 9) });
     }
 
-    const cancelNewVsRec = {
-      new: round0(cancel * (0.55 + rnd() * 0.2)),
-      recurrent: Math.max(0, cancel - round0(cancel * (0.55 + rnd() * 0.2))),
-    };
+    const cancelNew = Math.min(cancel, round0(cancel * (0.55 + rnd() * 0.2)));
+    const cancelNewVsRec = { new: cancelNew, recurrent: Math.max(0, cancel - cancelNew) };
 
     const cancelReasonWeights = [1.1, 0.9, 1.4, 1.0, 0.7].map((w) => w * (0.85 + rnd() * 0.4));
     const cancelReasonCounts = distributeByWeights(cancel, cancelReasonWeights, rnd);
@@ -692,7 +715,7 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
 
     // rows (bounded so UI isn't huge)
     for (let i = 0; i < Math.min(18, reprog); i++) {
-      const win = pickDeliveryWindow(rnd);
+      const win = pickDeliveryWindowForPetshop(ps, rnd);
       const baseDate = new Date(now.getTime() - (52 + rnd() * 120) * 60 * 60 * 1000);
       const createdAt = dateWithWindow(baseDate, win, rnd);
       const partido = pick(rnd, partidos);
@@ -710,7 +733,7 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
     }
 
     for (let i = 0; i < Math.min(18, demSinDespachar); i++) {
-      const win = pickDeliveryWindow(rnd);
+      const win = pickDeliveryWindowForPetshop(ps, rnd);
       const basePrinted = new Date(now.getTime() - (24 + rnd() * 18) * 60 * 60 * 1000);
       const printedAt = dateWithWindow(basePrinted, win, rnd);
       const waitHours = (now.getTime() - printedAt.getTime()) / (1000 * 60 * 60);
@@ -732,7 +755,7 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
     }
 
     for (let i = 0; i < Math.min(14, Math.max(1, round0(transacciones * 0.03))); i++) {
-      const win = pickDeliveryWindow(rnd);
+      const win = pickDeliveryWindowForPetshop(ps, rnd);
       const baseDate = new Date(now.getTime() - (18 + rnd() * 96) * 60 * 60 * 1000);
       const createdAt = dateWithWindow(baseDate, win, rnd);
       const closedAt = new Date(createdAt.getTime() + (2 + rnd() * 18) * 60 * 60 * 1000);
@@ -753,7 +776,7 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
     }
 
     for (let i = 0; i < Math.min(16, cancel); i++) {
-      const win = pickDeliveryWindow(rnd);
+      const win = pickDeliveryWindowForPetshop(ps, rnd);
       const baseDate = new Date(now.getTime() - (6 + rnd() * 120) * 60 * 60 * 1000);
       const createdAt = dateWithWindow(baseDate, win, rnd);
       const canceledAt = new Date(createdAt.getTime() + (1 + rnd() * 24) * 60 * 60 * 1000);
@@ -779,7 +802,7 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
 
     // 1ra vuelta: primer intento entre 24–48hs atrás
     for (let i = 0; i < Math.min(14, vuelta1); i++) {
-      const win = pickDeliveryWindow(rnd);
+      const win = pickDeliveryWindowForPetshop(ps, rnd);
       const hoursAgo = 24 + rnd() * 23; // 24–47hs
       const baseAttempt = new Date(now.getTime() - hoursAgo * 60 * 60 * 1000);
       const attemptAt = dateWithWindow(baseAttempt, win, rnd);
@@ -802,7 +825,7 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
 
     // 2da vuelta: segundo intento hace más de 48hs
     for (let i = 0; i < Math.min(10, vuelta2); i++) {
-      const win = pickDeliveryWindow(rnd);
+      const win = pickDeliveryWindowForPetshop(ps, rnd);
       const hoursAgo = 48 + rnd() * 48; // 48–96hs
       const baseAttempt = new Date(now.getTime() - hoursAgo * 60 * 60 * 1000);
       const attemptAt = dateWithWindow(baseAttempt, win, rnd);
@@ -827,8 +850,8 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
 
   // Un único caso estancado derivado a Mis Pichos (representativo).
   {
-    const mp = petshops.find((p) => p.id === "mis_pichos");
-    const win = pickDeliveryWindow(rnd);
+    const mp = petshops.find((p) => p.id === "mis_pichos") ?? petshops[0]!;
+    const win = pickDeliveryWindowForPetshop(mp, rnd);
     const baseCreated = new Date(now.getTime() - (18 + rnd() * 36) * 60 * 60 * 1000);
     const createdAt = dateWithWindow(baseCreated, win, rnd);
     const waitHours = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
@@ -842,7 +865,7 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
       deliveryWindow: win,
       product: `Derivado (sin petshop) · ${pick(rnd, products)}`,
       petshopId: "mis_pichos",
-      petshopName: mp?.name ?? "Mis Pichos",
+      petshopName: mp.name,
       waitHours: round0(waitHours),
     });
   }
@@ -864,18 +887,38 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
     orders: x.total,
   }));
 
-  const timelineDaily: TimelineBucket[] = days.map((d) => {
-    const t = iso(startOfDay(d));
-    const base = 480 + rnd() * 260;
-    const total = round0(base);
-    const transacciones = round0(base * (0.6 + rnd() * 0.12));
-    const cancel = round0(base * (0.02 + rnd() * 0.02));
-    const reprog = round0(base * (0.03 + rnd() * 0.02));
-    const demSinDespachar = round0(base * (0.04 + rnd() * 0.03));
-    return { t, total, transacciones, cancel, reprog, demSinDespachar };
-  });
+  const aggTimeline = metricsByPetshop.reduce(
+    (a, m) => ({
+      total: a.total + m.total,
+      transacciones: a.transacciones + m.transacciones,
+      cancel: a.cancel + m.cancel,
+      reprog: a.reprog + m.reprog,
+      demSinDespachar: a.demSinDespachar + m.demSinDespachar,
+    }),
+    { total: 0, transacciones: 0, cancel: 0, reprog: 0, demSinDespachar: 0 },
+  );
 
-  return {
+  const timelineDaily: TimelineBucket[] =
+    days.length === 0
+      ? []
+      : (() => {
+          const dayWeights = days.map(() => 0.88 + rnd() * 0.28);
+          const dailyTotal = distributeByWeights(aggTimeline.total, dayWeights, rnd);
+          const dailyTx = distributeByWeights(aggTimeline.transacciones, dayWeights, rnd);
+          const dailyCancel = distributeByWeights(aggTimeline.cancel, dayWeights, rnd);
+          const dailyReprog = distributeByWeights(aggTimeline.reprog, dayWeights, rnd);
+          const dailyDem = distributeByWeights(aggTimeline.demSinDespachar, dayWeights, rnd);
+          return days.map((d, i) => ({
+            t: iso(startOfDay(d)),
+            total: dailyTotal[i] ?? 0,
+            transacciones: dailyTx[i] ?? 0,
+            cancel: dailyCancel[i] ?? 0,
+            reprog: dailyReprog[i] ?? 0,
+            demSinDespachar: dailyDem[i] ?? 0,
+          }));
+        })();
+
+  const payload: OpsDashboardResponse = {
     now: now.toISOString(),
     range: { from: fromIso, to: toIso },
     petshops,
@@ -890,5 +933,9 @@ export function getMockOpsDashboard(fromIso: string, toIso: string): OpsDashboar
     vuelta2Rows,
     top3Petshops,
   };
+
+  return payload;
 }
+
+export { validateOpsDashboardResponse, validatePetshopMetrics } from "./opsDashboardValidate";
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getMockOpsDashboard } from "@/lib/data/mockOpsDashboard";
+import { validateOpsDashboardResponse } from "@/lib/data/opsDashboardValidate";
 
 export async function GET(req: NextRequest) {
   const now = new Date();
@@ -20,6 +21,12 @@ export async function GET(req: NextRequest) {
   // - GET /core/ops/capacity?date=YYYY-MM-DD
 
   const payload = getMockOpsDashboard(from.toISOString(), to.toISOString());
+
+  if (process.env.NODE_ENV !== "production") {
+    const issues = validateOpsDashboardResponse(payload);
+    if (issues.length) console.warn("[api/ops/dashboard]", issues);
+  }
+
   return NextResponse.json(payload);
 }
 

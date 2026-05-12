@@ -91,7 +91,13 @@ Cuando el usuario cambia el rango manualmente desde el calendario, `compareMode`
 `ops-live` → `capacidad` → `demoras` → `top3` → `sl-live` → `cancelados` → `spliteados` → `soluciones` → `estancados` → `incidencias`
 
 ### Integración con Core API real
-Reemplazar `src/lib/data/mockOpsDashboard.ts` con un adaptador que devuelva `OpsDashboardResponse`. El contrato de tipos **no debe cambiar**. Campos clave por orden de prioridad de integración:
+Reemplazar la llamada a `getMockOpsDashboard()` en `src/app/api/ops/dashboard/route.ts` por un adaptador que devuelva `OpsDashboardResponse`. El contrato de tipos **no debe cambiar**.
+
+**Invariantes (el adaptador debe cumplirlas):** ver `validateOpsDashboardResponse` y `validatePetshopMetrics` en `src/lib/data/opsDashboardValidate.ts`. Resumen por petshop: `newClients + recurrentClients === total`; `newTransactions + recurrentTransactions === transacciones`; `onTimeN + outTimeN === delivered`; `onTimeTx + outTimeTx === transacciones`; `onTimeShort1014N + … + onTimeFlex1422N === onTimeN`; `sum(cancelReasons.count) === cancel`; `cancelNewVsRec.new + recurrent === cancel`; `delivered <= total - cancel`. A nivel global: cada serie en `timelineDaily[]` debe sumar la suma del mismo campo en `metricsByPetshop[]` (el mock reparte por día con los mismos pesos para correlación). En desarrollo, llamar `validateOpsDashboardResponse(data)` antes del `NextResponse.json` y loguear o fallar si hay errores.
+
+**Mock:** `getMockOpsDashboard(from, to)` usa semilla `fnv1a32(from|to)` (datos reproducibles por rango). Las filas de incidencias usan `deliveryWindow` acorde a `petshops[].capacity` del mismo petshop.
+
+Campos clave por orden de prioridad de integración:
 1. `metricsByPetshop[]` — agrega todos los KPIs de la sección superior
 2. `reprogramarRows`, `sinDespacharRows`, `canceladosRows`, `cerradosManualmenteRows`, `vuelta1Rows`, `vuelta2Rows` — tablas de incidencias
 3. `capacity` (a través de `capacityFlexHourly`, `capacityFranjaHourly`, `capacityAssignedNext7`) — sección de capacidad
