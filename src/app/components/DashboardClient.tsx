@@ -2629,12 +2629,13 @@ export default function DashboardClient() {
                           {onTimePct != null ? <DeltaPill deltaPct={dOnTime} mode="higher_better" vsLabel={vsLabel} /> : <span className="sub">—</span>}
                         </div>
                       </div>
-                      <div className="kpiSub">
-                        {prevOnTimePct != null ? (
-                          <><span className="mono">Anterior: {formatPct0(prevOnTimePct)}</span><span style={{ marginLeft: 8 }}>· {onTimeN.toLocaleString("es-AR")}/{(onTimeN + outTimeN).toLocaleString("es-AR")} entregas</span></>
-                        ) : onTimePct != null ? (
+                      <div className="kpiSub kpiSubLines">
+                        {prevOnTimePct != null ? <span className="mono">Anterior: {formatPct0(prevOnTimePct)}</span> : null}
+                        {onTimePct != null ? (
                           <span className="mono">{onTimeN.toLocaleString("es-AR")}/{(onTimeN + outTimeN).toLocaleString("es-AR")} entregas</span>
-                        ) : "—"}
+                        ) : (
+                          "—"
+                        )}
                       </div>
                     </>
                   ) : (

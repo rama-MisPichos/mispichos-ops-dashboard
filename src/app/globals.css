@@ -665,36 +665,61 @@ html[data-theme] *{
 }
 
 .kpiValue{
-  margin-top: 6px;
+  margin-top: 0;
   font-size: 22px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text);
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
 }
 
+/* Valor + % vs ayer: alineados a la izquierda, misma línea base */
 .kpiValueRow{
   display:flex;
   align-items:center;
-  justify-content:space-between;
-  gap: 10px;
+  justify-content:flex-start;
+  flex-wrap:wrap;
+  gap: 6px 10px;
+  margin-top: 6px;
+  width: 100%;
 }
 
 .kpiDeltaRight{
   display:flex;
   align-items:center;
-  justify-content:flex-end;
+  justify-content:flex-start;
   min-width: 0;
   flex: 0 0 auto;
+  margin-top: 0;
+}
+
+.kpiSmall,
+.kpiMain > div:first-child{
+  text-align:left;
+}
+
+.kpiSmall .kpiLabel,
+.kpiMain > div:first-child .kpiLabel{
+  width: 100%;
+}
+
+.kpiSmall .kpiSub,
+.kpiMain > div:first-child .kpiSub{
+  text-align:left;
+  width: 100%;
 }
 
 .deltaText{
   display:inline-flex;
   align-items:center;
-  gap: 7px;
+  justify-content:center;
+  gap: 6px;
   padding: 0;
   border: 0;
   background: transparent;
   font-size: 12px;
   font-weight: 600;
+  line-height: 1.2;
   font-variant-numeric: tabular-nums;
   letter-spacing: .15px;
   white-space:nowrap;
@@ -704,7 +729,10 @@ html[data-theme] *{
 .deltaArrow{
   font-size: 13px;
   line-height: 1;
-  transform: translateY(-0.5px);
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  transform: none;
 }
 
 .kpiSub{
@@ -820,13 +848,13 @@ html[data-theme] *{
 }
 
 .kpiSmallWide .kpiValueRow{
-  gap: 14px;
   justify-content:flex-start;
+  gap: 6px 10px;
 }
 
 .kpiSmallWide .kpiValue{
-  font-size: 20px;
-  line-height: 1.05;
+  font-size: 22px;
+  line-height: 1.15;
 }
 
 .kpiSmallWide .kpiDeltaRight{
@@ -835,6 +863,14 @@ html[data-theme] *{
 
 .kpiSmallWide .kpiSub{
   margin-top: 6px;
+  text-align:left;
+}
+
+.kpiSubLines{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap: 3px;
 }
 
 .twoCol{
